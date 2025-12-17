@@ -1,0 +1,563 @@
+# ====================================================================
+# Azure AI Content Understanding - API Testing Guide
+# ====================================================================
+#
+# Content Understanding analyzes documents, images, audio, and video—
+# transforming them into structured, searchable data.
+#
+# DOCUMENTATION:
+# - Overview: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/overview
+# - REST API Reference: https://learn.microsoft.com/en-us/rest/api/contentunderstanding/operation-groups
+#
+# ====================================================================
+#
+# TABLE OF CONTENTS
+# ====================================================================
+# Use Ctrl+F (Windows) or Cmd+F (Mac) to jump to sections:
+#
+# QUICK START: Get Started in 3 Steps
+# SECTION 1: Content Extraction (No LLM Required)
+# SECTION 2: Domain-Specific Analyzers (invoice, tax, ID, etc.)
+# SECTION 3: RAG Analyzers 
+# SECTION 4: Custom Analyzers with Field Extraction
+# SECTION 5: Custom Video Analysis with Field Extraction
+# SECTION 6: Analyzer Management (List, Copy, Delete)
+#
+# ====================================================================
+
+# SETUP:
+# 1. Create a .env file in this directory with the API key and endpoint for your Azure Foundry Resource:
+#    API_KEY=your-subscription-key
+#    ENDPOINT_URL=your-endpoint-url
+# 2. Install VS Code REST Client extension - https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+
+# Variables - Loaded from .env file in the same directory
+@subscriptionKey = {{$dotenv API_KEY}}
+@endpoint = {{$dotenv ENDPOINT_URL}}
+@apiVersion = 2025-11-01
+
+# ====================================================================
+# QUICK START: Get Started in 3 Steps
+# ====================================================================
+#
+# Follow these steps to start analyzing content:
+# 1. Check model deployments for 4.1, 4.1-mini, and text-embedding-ada-002 (required for RAG and domain analyzers)
+# 2. Try content extraction (no LLM required)
+# 3. Try domain-specific analyzer like invoice (may require LLM)
+#
+# Learn more: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/quickstart/use-rest-api
+#
+
+### STEP 1: Check current model deployment settings
+# If you configured your resource via https://aka.ms/cu-studio, this should already be set
+GET {{endpoint}}/contentunderstanding/defaults?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### STEP 1b: Configure model deployments (if needed)
+# Only required if using BYOC (Bring Your Own Compute) with custom Azure OpenAI deployments
+# Learn more: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/concepts/models-deployments
+PATCH {{endpoint}}/contentunderstanding/defaults?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Content-Type: application/json
+
+{
+  "modelDeployments": {
+    "gpt-4.1": "<<your gpt-4.1 deployment name>>",
+    "gpt-4.1-mini": "<<your gpt-4.1-mini deployment name>>",
+    "text-embedding-ada-002": "<<your text-embedding-ada-002 deployment name>>",
+    "text-embedding-3-large": "<<your text-embedding-3-large deployment name>>"
+  }
+}
+
+### STEP 2: Try content extraction with prebuilt-layout
+# ⚡ This analyzer does NOT require LLM models - works immediately!
+# Extracts text, tables, figures, sections, hyperlinks, and annotations
+# ────────────────────────────────────────────────────────────────────
+# 📋 TWO-STEP PROCESS:
+# ────────────────────────────────────────────────────────────────────
+# This is a long-running async operation:
+#
+# STEP 1: POST request initiates the analysis (returns operation ID)
+# STEP 2: GET request retrieves results using the operation ID
+# ────────────────────────────────────────────────────────────────────
+# STEP 1: POST to start layout analysis
+# @name quickStartLayout
+POST {{endpoint}}/contentunderstanding/analyzers/prebuilt-layout:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://github.com/Azure-Samples/cognitive-services-sample-data-files/raw/master/ComputerVision/Images/printed_text.jpg"
+    }
+  ]
+}
+
+### STEP 2: Get layout analysis results
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{quickStartLayout.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### STEP 3: Try domain-specific analyzer, ex. prebuilt-invoice
+# Extracts vendor, items, totals, dates from invoices
+# This will use the LLM in default/models to perform Field Extraction
+#
+# You can also use other prebuilt analyzers like prebuilt-receipt, prebuilt-idDocument, 
+# prebuilt-tax.us.1040, just by changing the analyzer ID below.
+# See full list: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/concepts/prebuilt-analyzers
+# @name quickStartInvoice
+POST {{endpoint}}/contentunderstanding/analyzers/prebuilt-invoice:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://github.com/Azure-Samples/azure-ai-content-understanding-python/raw/refs/heads/main/data/invoice.pdf"
+    }
+  ]
+}
+
+### Get invoice analysis results
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{quickStartInvoice.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+# ====================================================================
+# SECTION 1: CONTENT EXTRACTION (No LLM Required)
+# ====================================================================
+#
+# ⚠️ These analyzers do NOT require LLM or embedding models.
+# They work immediately after resource creation.
+#
+# - prebuilt-read: Basic OCR (words, paragraphs, formulas, barcodes)
+# - prebuilt-layout: Advanced OCR with layout (tables, figures, sections)
+#
+# Learn more: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/document/overview
+#
+
+### 1.1 prebuilt-read: Basic OCR
+# Extracts words, paragraphs, formulas, barcodes without layout analysis
+# Example with handwritten text
+# @name readAnalysis
+POST {{endpoint}}/contentunderstanding/analyzers/prebuilt-read:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://github.com/Azure-Samples/cognitive-services-sample-data-files/raw/master/ComputerVision/Images/handwritten_text.jpg"
+    }
+  ]
+}
+
+### Get read analysis results
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{readAnalysis.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### 1.2 prebuilt-layout: OCR with layout analysis
+# Extracts text, tables, figures, sections, hyperlinks, annotations
+# Example with document containing paragraphs and printed text
+# @name layoutAnalysis
+POST {{endpoint}}/contentunderstanding/analyzers/prebuilt-layout:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://github.com/Azure-Samples/cognitive-services-sample-data-files/raw/master/ComputerVision/Images/printed_text.jpg"
+    }
+  ]
+}
+
+### Get layout analysis results
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{layoutAnalysis.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+# ====================================================================
+# SECTION 2: DOMAIN-SPECIFIC ANALYZERS
+# ====================================================================
+#
+# Preconfigured analyzers for common document types (invoice, receipt, tax forms, 
+# ID documents, etc.). Powered by rich knowledge bases of real-world examples.
+#
+# These analyzers may require LLM models depending on document complexity.
+# Replace 'prebuilt-invoice' with any analyzer from the list below:
+#
+# Financial: prebuilt-invoice, prebuilt-receipt, prebuilt-creditCard
+# Identity: prebuilt-idDocument, prebuilt-healthInsuranceCard.us  
+# Tax (US): prebuilt-tax.us.1040, prebuilt-tax.us.w2, prebuilt-tax.us.1099*
+# Mortgage (US): prebuilt-mortgage.us.1003, prebuilt-mortgage.us.1004
+# Other: prebuilt-utilityBill, prebuilt-payStub.us, prebuilt-contract
+#
+# Learn more: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/concepts/prebuilt-analyzers
+#
+
+### 2.1 Analyze with prebuilt-invoice
+# Extracts vendor, items, totals, dates from invoices
+# @name invoiceAnalysis
+POST {{endpoint}}/contentunderstanding/analyzers/prebuilt-invoice:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://github.com/Azure-Samples/azure-ai-content-understanding-python/raw/refs/heads/main/data/invoice.pdf"
+    }
+  ]
+}
+
+### Get invoice analysis results
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{invoiceAnalysis.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### 2.2 Analyze with prebuilt-document
+# General-purpose document analysis with tables, key-value pairs, entities
+# Works with any document type - no domain-specific training needed
+# @name documentAnalysis
+POST {{endpoint}}/contentunderstanding/analyzers/prebuilt-document:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://github.com/Azure-Samples/azure-ai-content-understanding-python/raw/refs/heads/main/data/mixed_financial_docs.pdf"
+    }
+  ]
+}
+
+### Get document analysis results
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{documentAnalysis.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+# ====================================================================
+# SECTION 3: RAG ANALYZERS (Requires LLM + Embeddings)
+# ====================================================================
+#
+# ⚠️ These analyzers REQUIRE gpt-4.1-mini (or gpt-4.1) and embedding models.
+# Configure model deployments in QUICK START before using these analyzers.
+#
+# Optimized for RAG scenarios with semantic analysis and markdown extraction:
+# - prebuilt-documentSearch: Document ingestion with summaries
+# - prebuilt-imageSearch: Image analysis with descriptions
+# - prebuilt-audioSearch: Audio transcription with summaries
+# - prebuilt-videoSearch: Video segmentation with transcripts
+#
+# Learn more:
+# - Documents: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/document/overview
+# - Images: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/image/overview
+# - Audio: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/audio/overview
+# - Video: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/video/overview
+#
+
+### 3.1 prebuilt-documentSearch: Document ingestion for RAG
+# Extracts content, tables, figures with descriptions, chart.js/mermaid.js output
+# Generates document summaries, captures annotations, supports many formats
+#
+# ⚡ Uses GPT-4.1-mini to generate detailed descriptions of all figures/charts
+# Search results for "figures" to see AI-generated visual descriptions like:
+# "id": "1.1", "description": "Five wind turbines with three blades each, 
+# solar panels in foreground, sunset sky..."
+#
+# 💡 TIP: Use "range" parameter to limit analysis to specific pages
+# Format: "1-3" (pages 1-3), "1,5,7" (specific pages), or "1-3,7-9" (mixed)
+# This processes only the specified pages, reducing cost and latency
+#
+# @name ragAnalysis
+POST {{endpoint}}/contentunderstanding/analyzers/prebuilt-documentSearch:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://raw.githubusercontent.com/Azure-Samples/azure-search-sample-data/refs/heads/main/sustainable-ai-pdf/Accelerating-Sustainability-with-AI-2025.pdf",
+      "range": "1-3"
+    }
+  ]
+}
+
+### Get RAG analysis results
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{ragAnalysis.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Get RAG analyser definition
+GET {{endpoint}}/contentunderstanding/analyzers/prebuilt-documentSearch?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### 3.2 Other RAG analyzers (similar pattern)
+# Replace 'prebuilt-documentSearch' with:
+# - prebuilt-imageSearch: Image analysis with descriptions
+# - prebuilt-audioSearch: Audio transcription with summaries  
+# - prebuilt-videoSearch: Video segmentation with transcripts
+# and swap input URLs accordingly.
+
+
+
+# ====================================================================
+# SECTION 4: CUSTOM ANALYZERS WITH FIELD EXTRACTION
+# ====================================================================
+#
+# FIELD EXTRACTION is the core value proposition of custom analyzers.
+# Define a field schema to extract specific structured data from your content.
+#
+# Field extraction methods:
+# - extract: Extract existing data from the content (e.g., policy number)
+# - classify: Classify content into predefined categories (e.g., loss type)
+# - generate: Generate new insights from the content (e.g., summaries)
+#
+# Learn more: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/tutorial/create-custom-analyzer
+#
+
+### 4.1 Create custom analyzer with field extraction
+# Example: Custom invoice analyzer extracting top-level fields and line items
+PUT {{endpoint}}/contentunderstanding/analyzers/custom_invoice?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Content-Type: application/json
+
+{
+  "baseAnalyzerId": "prebuilt-document",
+  "analyzerId": "custom_invoice",
+  "models": {
+    "completion": "gpt-4.1",
+    "embedding": "text-embedding-ada-002"
+  },
+  "fieldSchema": {
+    "fields": {
+      "InvoiceNumber": {
+        "type": "string",
+        "method": "extract",
+        "description": "The invoice number (e.g., INV-100)"
+      },
+      "InvoiceDate": {
+        "type": "string",
+        "method": "extract",
+        "description": "The invoice date"
+      },
+      "CustomerName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The customer name or company name"
+      },
+      "TotalAmount": {
+        "type": "number",
+        "method": "extract",
+        "description": "The total amount due on the invoice"
+      },
+      "Subtotal": {
+        "type": "number",
+        "method": "extract",
+        "description": "The subtotal before taxes"
+      },
+      "SalesTax": {
+        "type": "number",
+        "method": "extract",
+        "description": "The sales tax amount"
+      },
+      "LineItems": {
+        "type": "array",
+        "method": "extract",
+        "description": "Individual line items from the invoice",
+        "items": {
+          "type": "object",
+          "properties": {
+            "Date": {
+              "type": "string",
+              "description": "Date of the service or item"
+            },
+            "Description": {
+              "type": "string",
+              "description": "Description of the service or item"
+            },
+            "Quantity": {
+              "type": "number",
+              "description": "Quantity or hours"
+            },
+            "Price": {
+              "type": "number",
+              "description": "Unit price"
+            },
+            "Amount": {
+              "type": "number",
+              "description": "Line item total amount"
+            }
+          }
+        }
+      }
+    },
+    "definitions": {}
+  },
+  "omitContent": true
+}
+
+### Get analyzer definition
+GET {{endpoint}}/contentunderstanding/analyzers/custom_invoice?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### 4.2 Test the custom analyzer with invoice
+# @name customAnalysis
+POST {{endpoint}}/contentunderstanding/analyzers/custom_invoice:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://github.com/Azure-Samples/azure-ai-content-understanding-python/raw/refs/heads/main/data/invoice.pdf"
+    }
+  ]
+}
+
+### Get custom analysis results
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{customAnalysis.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+# ====================================================================
+# SECTION 5: CUSTOM VIDEO ANALYSIS WITH FIELD EXTRACTION  
+# ====================================================================
+#
+# Video analyzers demonstrate advanced field extraction with nested structures.
+# Extract segments, scenes, timestamps, and generated insights from video content.
+#
+# Learn more: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/video/overview
+#
+
+### 5.1 Create custom video analyzer with field extraction
+# Example: Dynamic chaptering with segments, scenes, and timestamps
+PUT {{endpoint}}/contentunderstanding/analyzers/video_scenes_list?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Content-Type: application/json
+
+{
+  "description": "Dynamic video chaptering with scene detection",
+  "scenario": "videoShot",
+  "baseAnalyzerId": "prebuilt-video",
+  "models": {
+    "completion": "gpt-4.1"
+  },
+  "config": {
+    "returnDetails": true,
+    "enableSegmentation": true,
+    "locales": ["en-US"]
+  },
+  "fieldSchema": {
+    "name": "Content Understanding - Dynamic Chaptering",
+    "fields": {
+      "Segments": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "SegmentId": {
+              "type": "string"
+            },
+            "SegmentType": {
+              "type": "string",
+              "method": "generate",
+              "description": "The short title or a short summary of the story or chapter."
+            },
+            "Scenes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "Description": {
+                    "type": "string",
+                    "method": "generate",
+                    "description": "A five-word description of the scene. A scene is a smaller segment of the segment where a continous block for storytelling unfolds within a specific time, place, and set of characters. A scene can only belong to a single chapter, and cannot overlap with other scenes. Scenes are sequential across the video."
+                  },
+                  "StartTimestamp": {
+                    "type": "string",
+                    "description": "the start timestamp of the scene"
+                  },
+                  "EndTimestamp": {
+                    "type": "string",
+                    "description": "the end timestamp of the scene"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+### Get video analyzer definition
+GET {{endpoint}}/contentunderstanding/analyzers/video_chaptering?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### 5.2 Test video analyzer
+# @name videoAnalysis
+POST {{endpoint}}/contentunderstanding/analyzers/video_chaptering:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://github.com/Azure-Samples/azure-ai-content-understanding-python/raw/refs/heads/main/data/FlightSimulator.mp4"
+    }
+  ]
+}
+
+### Get video analysis results
+# ⏱️ NOTE: Video processing takes 1-2x the video duration
+# A 2-minute video may take 2-4 minutes to complete analysis
+# The service processes video at 2-3x human viewing speed
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{videoAnalysis.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+# ====================================================================
+# SECTION 6: ANALYZER MANAGEMENT (List, Copy, Delete)
+# ====================================================================
+#
+# Explore, copy, and manage your analyzers.
+#
+# Learn more: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/concepts/prebuilt-analyzers
+#
+
+### 6.1 List all available analyzers
+GET {{endpoint}}/contentunderstanding/analyzers?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### 6.2 List only prebuilt analyzers
+GET {{endpoint}}/contentunderstanding/analyzers?api-version={{apiVersion}}&$filter=startswith(analyzerId,'prebuilt-')
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### 6.3 Get specific analyzer definition
+GET {{endpoint}}/contentunderstanding/analyzers/prebuilt-invoice?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### 6.4 Copy analyzer within same resource
+# Useful for versioning or creating variations
+POST {{endpoint}}/contentunderstanding/analyzers/video_scenes_list-v2:copy?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "sourceAnalyzerId": "video_scenes_list"
+}
+
+### 6.5 Copy prebuilt to create stable version
+# Lock a prebuilt analyzer definition to prevent changes across API versions
+POST {{endpoint}}/contentunderstanding/analyzers/my-invoice:copy?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "sourceAnalyzerId": "prebuilt-invoice"
+}
+
+### 6.6 Delete custom analyzer
+DELETE {{endpoint}}/contentunderstanding/analyzers/my-invoice?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+# ====================================================================
+# END OF GUIDE
+# ====================================================================
+
