@@ -1,9 +1,8 @@
 # ====================================================================
-# Azure AI Content Understanding - API Testing Guide
+# Azure Content Understanding - API Testing Guide
 # ====================================================================
 #
-# Content Understanding analyzes documents, images, audio, and video—
-# transforming them into structured, searchable data.
+# See README.md for prerequisites and setup instructions.
 #
 # DOCUMENTATION:
 # - Overview: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/overview
@@ -24,12 +23,6 @@
 # SECTION 6: Analyzer Management (List, Copy, Delete)
 #
 # ====================================================================
-
-# SETUP:
-# 1. Create a .env file in this directory with the API key and endpoint for your Azure Foundry Resource:
-#    API_KEY=your-subscription-key
-#    ENDPOINT_URL=your-endpoint-url
-# 2. Install VS Code REST Client extension - https://marketplace.visualstudio.com/items?itemName=humao.rest-client
 
 # Variables - Loaded from .env file in the same directory
 @subscriptionKey = {{$dotenv API_KEY}}
