@@ -3,6 +3,31 @@
 > **Status**: Private Preview / Experimental  
 > **Recommended Model**: GPT-4.1
 
+## Getting Started
+
+You can enable the `enableImage` feature in two ways:
+
+### Option 1: Content Understanding Studio (Easiest)
+
+1. Open CU Studio with the feature flag enabled:  
+   **[https://contentunderstanding.ai.azure.com/?imageInputEnabled=true](https://contentunderstanding.ai.azure.com/?imageInputEnabled=true)**
+
+2. Create or open an analyzer
+
+3. Go to the **Settings** tab
+
+4. Under **Experimental settings**, check **"Enable image as input"**
+
+   ![Enable image as input setting in CU Studio](images/cu-studio-enable-image-setting.png)
+
+5. Save your analyzer and run analysis as usual
+
+### Option 2: REST API
+
+Add the `_experimental` configuration block when creating your analyzer via the API. See [Configuration](#configuration) section below for details, or use the [HTTP test file](enableImage-Guide.http) included in this folder.
+
+---
+
 ## Overview
 
 The `enableImage` flag is an experimental configuration option that enables **multimodal document analysis** in Azure Content Understanding. When enabled, CU sends both OCR-extracted markdown **and** full-page rendered images to the GPT model, allowing the model to use visual context for improved extraction accuracy.

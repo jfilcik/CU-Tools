@@ -1,0 +1,391 @@
+# ====================================================================
+# Azure Content Understanding - Experimental enableImage Flag Guide
+# ====================================================================
+#
+# This guide demonstrates how to use the experimental enableImage flag
+# to improve extraction accuracy for visually complex documents.
+#
+# PREREQUISITES:
+# - Azure AI Content Understanding resource
+# - GPT-4.1 model deployment (recommended for best results)
+# - .env file with API_KEY and ENDPOINT_URL configured
+#
+# DOCUMENTATION:
+# - Overview: https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/overview
+# - REST API: https://learn.microsoft.com/en-us/rest/api/contentunderstanding/operation-groups
+#
+# ====================================================================
+#
+# TABLE OF CONTENTS
+# ====================================================================
+# Use Ctrl+F (Windows) or Cmd+F (Mac) to jump to sections:
+#
+# SECTION 1: What is enableImage?
+# SECTION 2: When to Use enableImage
+# SECTION 3: Create Analyzer with enableImage
+# SECTION 4: Analyze Documents
+# SECTION 5: Comparing Results (With vs Without enableImage)
+#
+# ====================================================================
+
+# Variables - Loaded from .env file in the same directory
+@subscriptionKey = {{$dotenv API_KEY}}
+@endpoint = {{$dotenv ENDPOINT_URL}}
+@apiVersion = 2025-11-01
+
+# ====================================================================
+# SECTION 1: WHAT IS enableImage?
+# ====================================================================
+#
+# The enableImage flag is a PRIVATE PREVIEW / EXPERIMENTAL feature that
+# sends full-page rendered images to the GPT model IN ADDITION to the
+# layout-based markdown extraction.
+#
+# How it works:
+# 1. CU converts each PDF page to an image
+# 2. Sends the image + layout markdown to GPT (e.g., GPT-4.1)
+# 3. The model aggregates both channels for improved spatial understanding
+#
+# This combined input (OCR markdown + page images) improves extraction for:
+# ✔ Two-column layouts (e.g., K-1 documents)
+# ✔ Visually structured forms
+# ✔ Documents where position, indentation, and grids matter
+# ✔ Forms with checkbox layouts that depend on spatial context
+#
+# Internal testing showed improvements in specific fields (e.g., K-1 K3
+# checkbox scenarios) with up to +8.7% accuracy improvement in some tests.
+#
+# ⚠️ IMPORTANT: This is an experimental feature. Results vary by document
+# type and complexity. Always test with your specific documents.
+#
+# ====================================================================
+
+# ====================================================================
+# SECTION 2: WHEN TO USE enableImage
+# ====================================================================
+#
+# ✔ RECOMMENDED FOR:
+# ────────────────────────────────────────────────────────────────────
+# - Two-column layouts (e.g., K-1 tax documents)
+# - Complex visual layouts where OCR text alone loses structure
+# - Forms where field position determines meaning
+# - Documents with boxed layouts, grids, or multi-column structures
+# - Scenarios where VISUAL cues like labels, columns, or superscripts matter
+#
+# ✘ NOT RECOMMENDED WHEN:
+# ────────────────────────────────────────────────────────────────────
+# - Latency is critical (extraction time may double, e.g., 55-60s → 119s)
+# - You expect universal improvement (results are case-dependent)
+# - Visual content is low-resolution
+# - Simple single-column text documents (standard extraction works well)
+#
+# ====================================================================
+
+# ====================================================================
+# SECTION 3: CREATE ANALYZER WITH enableImage
+# ====================================================================
+#
+# To use enableImage, create a custom analyzer with the _experimental
+# configuration block. The flag must be set when creating the analyzer.
+#
+# 💡 TIP: Use GPT-4.1 for best results with image-based extraction.
+#
+
+### 3.1 Check current model deployments
+# Ensure you have GPT-4.1 configured (recommended for enableImage)
+GET {{endpoint}}/contentunderstanding/defaults?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### 3.2 Create custom analyzer WITH enableImage enabled
+# This analyzer is configured for visually complex documents like K-1 forms
+# The _experimental.enableImage flag enables multimodal (image + markdown) processing
+PUT {{endpoint}}/contentunderstanding/analyzers/custom_enableImage_analyzer1?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Content-Type: application/json
+
+{
+  "description": "Custom analyzer with enableImage for two-column and visually complex documents",
+  "baseAnalyzerId": "prebuilt-document",
+  "models": {
+    "completion": "gpt-4.1",
+    "embedding": "text-embedding-ada-002"
+  },
+  "config": {
+    "returnDetails": true,
+    "enableOcr": true,
+    "enableLayout": true,
+    "enableFormula": true,
+    "enableFigureDescription": true,
+    "enableFigureAnalysis": true,
+    "chartFormat": "chartjs",
+    "disableContentFiltering": true,
+    "tableFormat": "html",
+    "estimateFieldSourceAndConfidence": true,
+    "enableSegment": false,
+    "omitContent": false,
+    "segmentPerPage": false,
+    "enableAnnotations": true,
+    "annotationFormat": "markdown",
+    "_experimental": {
+      "enableImage": "true"
+    }
+  },
+  "fieldSchema": {
+    "fields": {
+      "documentType": {
+        "type": "string",
+        "method": "classify",
+        "enum": ["K-1 Form", "Tax Form", "Financial Statement", "Other"],
+        "description": "Classify this document as one of the following types based on its content, form number, and structure."
+      },
+      "taxYear": {
+        "type": "string",
+        "method": "extract",
+        "description": "The tax year shown on the document. Look for a four-digit year near labels like 'Tax Year', 'For calendar year', or in the form header. Format: YYYY (e.g., '2024')."
+      },
+      "partnerName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The name of the partner or recipient. VISUAL: Look for the name field in the left column, typically near 'Part II - Information About the Partner' or labels like 'Partner's name'. Extract the full legal name."
+      },
+      "partnerSSN": {
+        "type": "string",
+        "method": "extract",
+        "description": "The partner's Social Security Number (SSN) or Tax Identification Number (TIN). VISUAL: Located near the partner name in the identification section, often labeled 'Partner's SSN or TIN' or 'Identifying number'."
+      },
+      "partnershipName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The name of the partnership or entity issuing this K-1. VISUAL: Look in the header area or 'Part I - Information About the Partnership' section. Usually the first prominent name on the form."
+      },
+      "checkboxValues": {
+        "type": "object",
+        "description": "Checkbox status fields from the form. VISUAL: Carefully examine checkbox positions. Check marks may appear as X, ✓, filled boxes, or handwritten marks.",
+        "properties": {
+          "isFinalReturn": {
+            "type": "boolean",
+            "method": "extract",
+            "description": "VISUAL: Check if the 'Final K-1' or 'Final return' checkbox is marked. Look for checkboxes near the top of the form or in Part I. Return true if marked, false if empty."
+          },
+          "isAmended": {
+            "type": "boolean",
+            "method": "extract",
+            "description": "VISUAL: Check if the 'Amended K-1' checkbox is marked. Usually appears near 'Final K-1' checkbox. Return true if marked, false if empty."
+          }
+        }
+      },
+      "summary": {
+        "type": "string",
+        "method": "generate",
+        "description": "Generate a 2-3 sentence summary of the key financial information from this K-1 document, including the partnership name, partner name, tax year, and any notable distributions or allocations."
+      }
+    }
+  }
+}
+
+### 3.3 Verify analyzer was created with enableImage
+# Check that the _experimental.enableImage flag is present in the config
+GET {{endpoint}}/contentunderstanding/analyzers/custom_enableImage_analyzer1?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### 3.4 Create a COMPARISON analyzer WITHOUT enableImage
+# Use this to compare results between image-enabled and standard extraction
+PUT {{endpoint}}/contentunderstanding/analyzers/custom_noImage_analyzer?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Content-Type: application/json
+
+{
+  "description": "Custom analyzer WITHOUT enableImage for comparison testing",
+  "baseAnalyzerId": "prebuilt-document",
+  "models": {
+    "completion": "gpt-4.1",
+    "embedding": "text-embedding-ada-002"
+  },
+  "config": {
+    "returnDetails": true,
+    "enableOcr": true,
+    "enableLayout": true,
+    "enableFormula": true,
+    "enableFigureDescription": true,
+    "enableFigureAnalysis": true,
+    "chartFormat": "chartjs",
+    "tableFormat": "html",
+    "estimateFieldSourceAndConfidence": true,
+    "enableAnnotations": true,
+    "annotationFormat": "markdown"
+  },
+  "fieldSchema": {
+    "fields": {
+      "documentType": {
+        "type": "string",
+        "method": "classify",
+        "enum": ["K-1 Form", "Tax Form", "Financial Statement", "Other"],
+        "description": "Classify this document as one of the following types based on its content, form number, and structure."
+      },
+      "taxYear": {
+        "type": "string",
+        "method": "extract",
+        "description": "The tax year shown on the document. Look for a four-digit year near labels like 'Tax Year', 'For calendar year', or in the form header. Format: YYYY (e.g., '2024')."
+      },
+      "partnerName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The name of the partner or recipient. Look for labels like 'Partner's name' or 'Name' in the partner information section."
+      },
+      "partnerSSN": {
+        "type": "string",
+        "method": "extract",
+        "description": "The partner's Social Security Number (SSN) or Tax Identification Number (TIN). Located near the partner name, often labeled 'Partner's SSN or TIN' or 'Identifying number'."
+      },
+      "partnershipName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The name of the partnership or entity issuing this K-1. Look in the header area or 'Part I - Information About the Partnership' section."
+      },
+      "checkboxValues": {
+        "type": "object",
+        "description": "Checkbox status fields from the form.",
+        "properties": {
+          "isFinalReturn": {
+            "type": "boolean",
+            "method": "extract",
+            "description": "Check if the 'Final K-1' or 'Final return' checkbox is marked. Look for checkboxes near the top of the form. Return true if marked, false if empty."
+          },
+          "isAmended": {
+            "type": "boolean",
+            "method": "extract",
+            "description": "Check if the 'Amended K-1' checkbox is marked. Usually appears near 'Final K-1' checkbox. Return true if marked, false if empty."
+          }
+        }
+      },
+      "summary": {
+        "type": "string",
+        "method": "generate",
+        "description": "Generate a 2-3 sentence summary of the key financial information from this K-1 document, including the partnership name, partner name, tax year, and any notable distributions or allocations."
+      }
+    }
+  }
+}
+
+# ====================================================================
+# SECTION 4: ANALYZE DOCUMENTS
+# ====================================================================
+#
+# ⏱️ LATENCY NOTE: enableImage processing takes longer than standard extraction.
+# Expect approximately 2x processing time (e.g., 55-60s → 100-120s).
+#
+# 📋 TWO-STEP PROCESS (Long-running async operation):
+# STEP 1: POST request initiates analysis (returns operation ID)
+# STEP 2: GET request retrieves results using the operation ID
+#
+
+### 4.1 Analyze document WITH enableImage
+# Replace the URL below with your document (K-1, multi-column form, etc.)
+# @name enableImageAnalysis
+POST {{endpoint}}/contentunderstanding/analyzers/custom_enableImage_analyzer1:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://raw.githubusercontent.com/Azure-Samples/azure-search-sample-data/refs/heads/main/sustainable-ai-pdf/Accelerating-Sustainability-with-AI-2025.pdf",
+      "range": "1-3"
+    }]
+}
+
+### 4.2 Get enableImage analysis results
+# ⏱️ NOTE: May take 1-2 minutes for complex documents
+# Poll this endpoint until status is "Succeeded"
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{enableImageAnalysis.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### 4.3 Analyze SAME document WITHOUT enableImage (for comparison)
+# @name noImageAnalysis
+POST {{endpoint}}/contentunderstanding/analyzers/custom_noImage_analyzer:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://raw.githubusercontent.com/Azure-Samples/azure-search-sample-data/refs/heads/main/sustainable-ai-pdf/Accelerating-Sustainability-with-AI-2025.pdf",
+      "range": "1-3"
+    }]
+}
+
+### 4.4 Get non-enableImage analysis results
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{noImageAnalysis.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+# ====================================================================
+# SECTION 5: COMPARING RESULTS & BEST PRACTICES
+# ====================================================================
+#
+# After running both analyzers on the same document, compare:
+# 1. Field accuracy - Are checkbox values correct?
+# 2. Spatial fields - Are two-column fields properly separated?
+# 3. Confidence scores - Check estimateFieldSourceAndConfidence values
+# 4. Processing time - Note the latency difference
+#
+# ────────────────────────────────────────────────────────────────────
+# BEST PRACTICES FOR SCHEMA DESIGN WITH enableImage
+# ────────────────────────────────────────────────────────────────────
+#
+# 1. Use VISUAL prefixes in field descriptions:
+#    "VISUAL: Look for the checkbox in the upper-right corner"
+#    "VISUAL: Refer to the image content for column positions"
+#
+# 2. For checkbox fields, describe the visual appearance:
+#    "Check marks may appear as X, ✓, or filled boxes"
+#
+# 3. Reference spatial locations explicitly:
+#    "Located in the left column, below the header"
+#    "Found in Box 1 of Part III"
+#
+# 4. Test iteratively - change one variable at a time:
+#    - First, test with enableImage OFF
+#    - Then, test with enableImage ON
+#    - Compare accuracy metrics between runs
+#
+# 5. Gather representative samples (3-5 minimum) and build ground truth
+#    to objectively measure improvements
+#
+# ────────────────────────────────────────────────────────────────────
+# TROUBLESHOOTING
+# ────────────────────────────────────────────────────────────────────
+#
+# Q: How do I confirm enableImage was applied?
+# A: GET your analyzer definition (Section 3.3) and verify
+#    _experimental.enableImage is present in the config
+#
+# Q: Results aren't improving with enableImage?
+# A: Try adding VISUAL: prefixes to field descriptions to guide
+#    the model to use image content. Some documents may not benefit.
+#
+# Q: Extraction is too slow?
+# A: enableImage doubles processing time. Consider whether the
+#    accuracy improvement justifies the latency for your use case.
+#
+# ====================================================================
+
+### 5.1 Delete test analyzers (cleanup)
+# Uncomment and run these when done testing
+
+# DELETE {{endpoint}}/contentunderstanding/analyzers/custom_enableImage_analyzer1?api-version={{apiVersion}}
+# Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+# DELETE {{endpoint}}/contentunderstanding/analyzers/custom_noImage_analyzer?api-version={{apiVersion}}
+# Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+# ====================================================================
+# END OF GUIDE
+# ====================================================================
+#
+# For questions about the enableImage feature, refer to internal
+# documentation or contact the Content Understanding team.
+#
+# Remember: This is an EXPERIMENTAL feature. We welcome feedback
+# to help improve extraction accuracy for visually complex documents.
+#
+# ====================================================================
