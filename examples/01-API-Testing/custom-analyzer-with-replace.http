@@ -1,0 +1,312 @@
+# ====================================================================
+# Custom Analyzer with Allow Replace Flag
+# ====================================================================
+#
+# This file demonstrates creating or replacing a custom analyzer
+# using the "allowReplace" query parameter.
+#
+# API Reference: https://learn.microsoft.com/en-us/rest/api/contentunderstanding/content-analyzers/create-or-replace?view=rest-contentunderstanding-2025-11-01&tabs=HTTP
+#
+# The allowReplace parameter enables the operation to replace an 
+# existing analyzer with the same ID, making it safe to update
+# analyzer definitions without causing conflicts.
+#
+# ====================================================================
+
+# Variables - Loaded from .env file in the same directory
+@subscriptionKey = {{$dotenv API_KEY}}
+@endpoint = {{$dotenv ENDPOINT_URL}}
+@apiVersion = 2025-11-01
+
+# ====================================================================
+# Example 1: Create Custom Analyzer with allowReplace=true
+# ====================================================================
+#
+# Using allowReplace=true ensures that if an analyzer with this ID
+# already exists, it will be replaced with the new definition.
+# This is useful for updating analyzer schemas or configurations.
+#
+# @name createCustomAnalyzerWithReplace
+PUT {{endpoint}}/contentunderstanding/analyzers/custom_claims_analyzer?api-version={{apiVersion}}&allowReplace=true
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Content-Type: application/json
+
+{
+  "description": "Custom analyzer for insurance claims processing",
+  "tags": {
+    "version": "1.0",
+    "category": "claims"
+  },
+  "baseAnalyzerId": "prebuilt-document",
+  "models": {
+    "completion": "gpt-4.1",
+    "embedding": "text-embedding-3-large"
+  },
+  "fieldSchema": {
+    "name": "Insurance Claims Schema",
+    "description": "Extract key information from insurance claims",
+    "fields": {
+      "ClaimNumber": {
+        "type": "string",
+        "method": "extract",
+        "description": "The unique claim reference number"
+      },
+      "ClaimDate": {
+        "type": "date",
+        "method": "extract",
+        "description": "The date the claim was filed"
+      },
+      "PolicyHolder": {
+        "type": "string",
+        "method": "extract",
+        "description": "Name of the policy holder"
+      },
+      "PolicyNumber": {
+        "type": "string",
+        "method": "extract",
+        "description": "The insurance policy number"
+      },
+      "LossType": {
+        "type": "string",
+        "method": "classify",
+        "description": "Category of loss",
+        "enum": ["property", "auto", "health", "liability", "other"]
+      },
+      "ClaimAmount": {
+        "type": "number",
+        "method": "extract",
+        "description": "The amount claimed"
+      },
+      "ClaimSummary": {
+        "type": "string",
+        "method": "generate",
+        "description": "AI-generated summary of the claim details"
+      },
+      "DocumentedExpenses": {
+        "type": "array",
+        "method": "extract",
+        "description": "List of expenses documented in the claim",
+        "items": {
+          "type": "object",
+          "properties": {
+            "Date": {
+              "type": "date",
+              "description": "Date of the expense"
+            },
+            "Category": {
+              "type": "string",
+              "description": "Category of expense"
+            },
+            "Amount": {
+              "type": "number",
+              "description": "Amount of the expense"
+            },
+            "Description": {
+              "type": "string",
+              "description": "Details about the expense"
+            }
+          }
+        }
+      }
+    },
+    "definitions": {}
+  },
+  "config": {
+    "enableOcr": true,
+    "enableLayout": true,
+    "enableFormula": false,
+    "returnDetails": true,
+    "omitContent": false
+  }
+}
+
+### Get custom analyzer definition
+GET {{endpoint}}/contentunderstanding/analyzers/custom_claims_analyzer?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Test the custom analyzer
+# @name testCustomAnalyzer
+POST {{endpoint}}/contentunderstanding/analyzers/custom_claims_analyzer:analyze?api-version={{apiVersion}}
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "inputs": [
+    {
+      "url": "https://github.com/Azure-Samples/azure-ai-content-understanding-python/raw/refs/heads/main/data/invoice.pdf"
+    }
+  ]
+}
+
+### Get analysis results
+GET {{endpoint}}/contentunderstanding/analyzerResults/{{testCustomAnalyzer.response.body.id}}?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+# ====================================================================
+# Example 2: Update Existing Analyzer with allowReplace=true
+# ====================================================================
+#
+# This demonstrates updating the custom_claims_analyzer with modified
+# field schema. The allowReplace=true parameter allows this PUT request
+# to replace the existing analyzer without throwing a conflict error.
+#
+# Simply modify the fieldSchema below and re-run this request to update
+# the analyzer definition.
+#
+
+### Update analyzer schema (with allowReplace=true to avoid conflicts)
+# @name updateCustomAnalyzer
+PUT {{endpoint}}/contentunderstanding/analyzers/custom_claims_analyzer?api-version={{apiVersion}}&allowReplace=true
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Content-Type: application/json
+
+{
+  "description": "Updated custom analyzer for insurance claims processing - v2",
+  "tags": {
+    "version": "2.0",
+    "category": "claims",
+    "lastUpdated": "2025-01-29"
+  },
+  "baseAnalyzerId": "prebuilt-document",
+  "models": {
+    "completion": "gpt-4.1",
+    "embedding": "text-embedding-3-large"
+  },
+  "fieldSchema": {
+    "name": "Insurance Claims Schema v2",
+    "description": "Enhanced schema for insurance claims with additional fields",
+    "fields": {
+      "ClaimNumber": {
+        "type": "string",
+        "method": "extract",
+        "description": "The unique claim reference number"
+      },
+      "ClaimDate": {
+        "type": "date",
+        "method": "extract",
+        "description": "The date the claim was filed"
+      },
+      "PolicyHolder": {
+        "type": "string",
+        "method": "extract",
+        "description": "Name of the policy holder"
+      },
+      "PolicyNumber": {
+        "type": "string",
+        "method": "extract",
+        "description": "The insurance policy number"
+      },
+      "LossType": {
+        "type": "string",
+        "method": "classify",
+        "description": "Category of loss",
+        "enum": ["property", "auto", "health", "liability", "other"]
+      },
+      "ClaimAmount": {
+        "type": "number",
+        "method": "extract",
+        "description": "The amount claimed"
+      },
+      "ClaimStatus": {
+        "type": "string",
+        "method": "classify",
+        "description": "Current status of the claim",
+        "enum": ["pending", "approved", "denied", "settled"]
+      },
+      "AdjusterName": {
+        "type": "string",
+        "method": "extract",
+        "description": "Name of the assigned claims adjuster"
+      },
+      "ClaimSummary": {
+        "type": "string",
+        "method": "generate",
+        "description": "AI-generated summary of the claim details"
+      },
+      "RiskAssessment": {
+        "type": "string",
+        "method": "generate",
+        "description": "AI-generated risk assessment based on claim details"
+      },
+      "DocumentedExpenses": {
+        "type": "array",
+        "method": "extract",
+        "description": "List of expenses documented in the claim",
+        "items": {
+          "type": "object",
+          "properties": {
+            "Date": {
+              "type": "date",
+              "description": "Date of the expense"
+            },
+            "Category": {
+              "type": "string",
+              "description": "Category of expense"
+            },
+            "Amount": {
+              "type": "number",
+              "description": "Amount of the expense"
+            },
+            "Description": {
+              "type": "string",
+              "description": "Details about the expense"
+            },
+            "Verified": {
+              "type": "boolean",
+              "description": "Whether the expense has been verified"
+            }
+          }
+        }
+      }
+    },
+    "definitions": {}
+  },
+  "config": {
+    "enableOcr": true,
+    "enableLayout": true,
+    "enableFormula": false,
+    "returnDetails": true,
+    "omitContent": false,
+    "estimateFieldSourceAndConfidence": true
+  }
+}
+
+# ====================================================================
+# Example 3: Create Without allowReplace (will fail if exists)
+# ====================================================================
+#
+# For reference: if you omit the allowReplace parameter or set it to 
+# false, the request will fail if an analyzer with that ID already exists.
+# Use this when you want to ensure you're only creating new analyzers.
+#
+
+### Create custom analyzer without allowReplace (strict creation)
+# This will return a 201 if successful, or fail with a conflict error
+# if the analyzer already exists
+# @name createCustomAnalyzerStrict
+PUT {{endpoint}}/contentunderstanding/analyzers/custom_new_analyzer?api-version={{apiVersion}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Content-Type: application/json
+
+{
+  "description": "Custom analyzer without allow replace",
+  "baseAnalyzerId": "prebuilt-document",
+  "models": {
+    "completion": "gpt-4.1"
+  },
+  "fieldSchema": {
+    "name": "Simple Schema",
+    "fields": {
+      "Title": {
+        "type": "string",
+        "method": "extract",
+        "description": "Document title"
+      }
+    },
+    "definitions": {}
+  }
+}
+
+# ====================================================================
+# END OF FILE
+# ====================================================================

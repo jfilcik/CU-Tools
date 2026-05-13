@@ -1,0 +1,87 @@
+{
+  "description": "Extract key fields from invoices including vendor information, dates, line items, and totals. Designed for standard commercial invoices.",
+  "baseAnalyzerId": "prebuilt-document",
+  "config": {
+    "returnDetails": true
+  },
+  "fieldSchema": {
+    "fields": {
+      "VendorName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The name of the company or vendor that issued the invoice. Typically found at the top of the document as a header, logo text, or near the 'From' or 'Bill From' section. May also appear as 'Seller', 'Supplier', or 'Company Name'."
+      },
+      "VendorAddress": {
+        "type": "string",
+        "method": "extract",
+        "description": "The full mailing address of the vendor, typically found below the vendor name. Includes street address, city, state/province, and postal code. May span multiple lines."
+      },
+      "InvoiceNumber": {
+        "type": "string",
+        "method": "extract",
+        "description": "The unique identifier for the invoice. Typically found near the top right of the document. May be labeled as 'Invoice #', 'Invoice Number', 'Invoice No.', 'Inv #', or 'Reference Number'. Format varies: may be numeric only or alphanumeric."
+      },
+      "InvoiceDate": {
+        "type": "string",
+        "method": "extract",
+        "description": "The date when the invoice was issued. Typically found near the invoice number at the top right of the document. May be labeled as 'Invoice Date', 'Date', 'Issue Date', or 'Billing Date'. Format is usually MM/DD/YYYY, DD/MM/YYYY, or YYYY-MM-DD."
+      },
+      "DueDate": {
+        "type": "string",
+        "method": "extract",
+        "description": "The date by which payment is due. May be labeled as 'Due Date', 'Payment Due', 'Pay By', or 'Net Due'. If not explicitly stated, may be calculated from payment terms. Format is usually MM/DD/YYYY."
+      },
+      "CustomerName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The name of the customer or buyer being billed. Found in the 'Bill To', 'Customer', 'Ship To', or 'Buyer' section of the invoice."
+      },
+      "LineItems": {
+        "type": "array",
+        "method": "extract",
+        "description": "Individual line items on the invoice, typically found in a table in the middle of the document.",
+        "items": {
+          "type": "object",
+          "description": "A single line item representing one product or service on the invoice.",
+          "properties": {
+            "ItemDescription": {
+              "type": "string",
+              "method": "extract",
+              "description": "Description of the product or service. Found in the 'Description', 'Item', 'Product', or 'Service' column."
+            },
+            "Quantity": {
+              "type": "number",
+              "method": "extract",
+              "description": "The quantity or count of items. Found in the 'Qty', 'Quantity', or 'Units' column."
+            },
+            "UnitPrice": {
+              "type": "number",
+              "method": "extract",
+              "description": "The price per unit. Found in the 'Unit Price', 'Price', 'Rate', or 'Cost' column."
+            },
+            "Amount": {
+              "type": "number",
+              "method": "extract",
+              "description": "The total amount for this line item (Quantity × Unit Price). Found in the 'Amount', 'Total', 'Line Total', or 'Ext. Price' column."
+            }
+          }
+        }
+      },
+      "SubTotal": {
+        "type": "number",
+        "method": "extract",
+        "description": "The sum of all line item amounts before tax or discounts. Found near the bottom of the line items table. May be labeled as 'Subtotal', 'Sub Total', 'Net Amount', or 'Amount Before Tax'."
+      },
+      "TaxAmount": {
+        "type": "number",
+        "method": "extract",
+        "description": "The total tax amount applied to the invoice. Found near the subtotal. May be labeled as 'Tax', 'Sales Tax', 'VAT', 'GST', or 'Tax Amount'. May show the tax rate percentage alongside."
+      },
+      "TotalAmount": {
+        "type": "number",
+        "method": "extract",
+        "description": "The final total amount due including tax and any adjustments. This is typically the largest and most prominent number near the bottom of the invoice. May be labeled as 'Total', 'Total Due', 'Amount Due', 'Grand Total', or 'Balance Due'. Not to be confused with subtotal which excludes tax."
+      }
+    }
+  }
+}

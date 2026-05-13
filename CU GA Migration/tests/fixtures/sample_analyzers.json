@@ -1,0 +1,72 @@
+{
+  "simple_document": {
+    "analyzerId": "my-doc-analyzer",
+    "properties": {
+      "scenario": "document",
+      "description": "Simple document analyzer",
+      "status": "ready",
+      "fieldSchema": {
+        "fields": {
+          "InvoiceNumber": { "type": "string" },
+          "Total": { "type": "number" }
+        }
+      },
+      "tags": { "team": "finance" }
+    }
+  },
+  "with_training_data": {
+    "analyzerId": "my-custom-analyzer",
+    "properties": {
+      "scenario": "customDocument",
+      "description": "Custom analyzer with training data",
+      "status": "ready",
+      "fieldSchema": {
+        "fields": {
+          "ClaimNumber": { "type": "string" }
+        }
+      },
+      "trainingData": {
+        "blobContainerUrl": "https://mystorage.blob.core.windows.net/training-data",
+        "prefix": "claims/",
+        "fieldMappings": [
+          { "fieldId": "ClaimNumber", "label": "Claim Number" }
+        ]
+      },
+      "tags": { "team": "claims" }
+    }
+  },
+  "with_pro_mode": {
+    "analyzerId": "my-pro-analyzer",
+    "properties": {
+      "scenario": "layout",
+      "description": "Analyzer using pro mode",
+      "status": "ready",
+      "proMode": true,
+      "analysisMode": "pro",
+      "fieldSchema": {},
+      "tags": {}
+    }
+  },
+  "with_face_api": {
+    "analyzerId": "my-face-analyzer",
+    "properties": {
+      "scenario": "document",
+      "description": "Analyzer using face API",
+      "status": "ready",
+      "faceAnalysis": true,
+      "personDirectory": true,
+      "fieldSchema": {},
+      "tags": {}
+    }
+  },
+  "unknown_scenario": {
+    "analyzerId": "my-weird-analyzer",
+    "properties": {
+      "scenario": "someCustomThing",
+      "description": "Analyzer with unmappable scenario",
+      "status": "ready",
+      "fieldSchema": {},
+      "tags": {}
+    }
+  }
+}

@@ -1,0 +1,194 @@
+{
+  "description": "Extract key information from Schedule K-1 (Form 1065) with focus on K2, K3 checkbox fields in Part II and Box 20 (Section 199A) information",
+  "scenario": "document",
+  "baseAnalyzerId": "prebuilt-document",
+  "config": {
+    "returnDetails": true
+  },
+  "fieldSchema": {
+    "fields": {
+      "FormType": {
+        "type": "string",
+        "method": "extract",
+        "description": "The form type identifier. Located at the top of page 1, showing 'Schedule K-1 (Form 1065)'. Expected value: 'Schedule K-1 (Form 1065)'"
+      },
+      "TaxYear": {
+        "type": "string",
+        "method": "extract",
+        "description": "The tax year for which this K-1 is filed. Found in the top section of the form. Format: 4-digit year. Example: '2023'"
+      },
+      "FormStatus": {
+        "type": "string",
+        "method": "extract",
+        "description": "Whether this is a 'Final K-1' or 'Amended K-1'. Located near the year in the header. Look for checkboxes indicating status."
+      },
+      "PartnershipEIN": {
+        "type": "string",
+        "method": "extract",
+        "description": "Partnership's employer identification number found in Part I, field A. Format: XX-XXXXXXX. Example: '82-9875874'"
+      },
+      "PartnershipName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The legal name of the partnership. Found in Part I, field B. Example: 'Windy Place Properties, LLC'"
+      },
+      "PartnerName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The name of the partner receiving this K-1. Found in Part I, field F, below the 'For partner entered in E' label."
+      },
+      "PartnerSSN": {
+        "type": "string",
+        "method": "extract",
+        "description": "Partner's Social Security Number in Part II, field E. Format: XXX-XX-XXXX. Example: '987-65-4321'"
+      },
+      "PartnerType": {
+        "type": "string",
+        "method": "extract",
+        "description": "Classification of partner in Part II, box G. Extract 'General partner or LLC member-manager' or 'Limited partner or other LLC member'. Identify which box is checked."
+      },
+      "PartnerDomesticForeign": {
+        "type": "string",
+        "method": "extract",
+        "description": "Whether partner is domestic or foreign, found in Part II, box H1. Extract 'Domestic partner' or 'Foreign partner' based on checked box."
+      },
+      "PartnerEntityType": {
+        "type": "string",
+        "method": "extract",
+        "description": "Type of entity for this partner in Part II, field I1. Examples: 'Individual', 'Corporation', 'Partnership', 'Trust', 'Estate'"
+      },
+      "ProfitShareBeginning": {
+        "type": "string",
+        "method": "extract",
+        "description": "Partner's percentage share of profit at beginning of tax year in Part II, section J. Format with percentage. Example: '50.0000000%'"
+      },
+      "ProfitShareEnding": {
+        "type": "string",
+        "method": "extract",
+        "description": "Partner's percentage share of profit at end of tax year in Part II, section J. Format with percentage. Example: '50.0000000%'"
+      },
+      "LossShareBeginning": {
+        "type": "string",
+        "method": "extract",
+        "description": "Partner's percentage share of loss at beginning of tax year in Part II, section J. Format with percentage."
+      },
+      "LossShareEnding": {
+        "type": "string",
+        "method": "extract",
+        "description": "Partner's percentage share of loss at end of tax year in Part II, section J. Format with percentage."
+      },
+      "CapitalShareBeginning": {
+        "type": "string",
+        "method": "extract",
+        "description": "Partner's percentage share of capital at beginning of tax year in Part II, section J. Format with percentage."
+      },
+      "CapitalShareEnding": {
+        "type": "string",
+        "method": "extract",
+        "description": "Partner's percentage share of capital at end of tax year in Part II, section J. Format with percentage."
+      },
+      "LiabilitiesNonrecourseBeginning": {
+        "type": "string",
+        "method": "extract",
+        "description": "Nonrecourse liabilities at beginning of year in Part II, box K1. Format: currency. Example: '$100,000'"
+      },
+      "LiabilitiesNonrecourseEnding": {
+        "type": "string",
+        "method": "extract",
+        "description": "Nonrecourse liabilities at end of year in Part II, box K1. Format: currency."
+      },
+      "LiabilitiesQualifiedNonrecourseBeginning": {
+        "type": "string",
+        "method": "extract",
+        "description": "Qualified nonrecourse financing at beginning of year in Part II, box K1. Format: currency."
+      },
+      "LiabilitiesQualifiedNonrecourseEnding": {
+        "type": "string",
+        "method": "extract",
+        "description": "Qualified nonrecourse financing at end of year in Part II, box K1. Format: currency."
+      },
+      "LiabilitiesRecourseBeginning": {
+        "type": "string",
+        "method": "extract",
+        "description": "Recourse liabilities at beginning of year in Part II, box K1. Format: currency. Example: '$263,050'"
+      },
+      "LiabilitiesRecourseEnding": {
+        "type": "string",
+        "method": "extract",
+        "description": "Recourse liabilities at end of year in Part II, box K1. Format: currency. Example: '$263,050'"
+      },
+      "K2_LowerTierPartnershipLiabilities": {
+        "type": "boolean",
+        "method": "extract",
+        "description": "Box K2 in Part II: Checkbox indicating if Item K-1 includes liability amounts from lower-tier partnerships. Check if this box is marked/checked. Located below the K1 liabilities section. Expected values: true (checked) or false (unchecked)"
+      },
+      "K3_LiabilityGuarantees": {
+        "type": "boolean",
+        "method": "extract",
+        "description": "Box K3 in Part II: Checkbox indicating if any of the above liability is subject to guarantees or other payment obligations by the partner. Located below K2. Check if this box is marked/checked. Expected values: true (checked) or false (unchecked)"
+      },
+      "CapitalAccountBeginning": {
+        "type": "string",
+        "method": "extract",
+        "description": "Beginning capital account in Part II, section L. Format: currency with sign (+ or -). Example: '$ -34,312' or '$ 34,312'"
+      },
+      "CapitalAccountEnding": {
+        "type": "string",
+        "method": "extract",
+        "description": "Ending capital account in Part II, section L. Format: currency with sign. Example: '$ -40,637'"
+      },
+      "M_BuiltInGainProperty": {
+        "type": "string",
+        "method": "extract",
+        "description": "Box M in Part II: Whether partner contributed property with built-in gain or loss. Extract 'Yes' or 'No' from the checkbox. Located below capital account section L."
+      },
+      "OrdinaryBusinessIncome": {
+        "type": "string",
+        "method": "extract",
+        "description": "Box 1 in Part III: Ordinary business income (loss). Format: currency with sign. Example: '0' or '-8,026'"
+      },
+      "NetRentalRealEstateIncome": {
+        "type": "string",
+        "method": "extract",
+        "description": "Box 2 in Part III: Net rental real estate income (loss). Format: currency with sign. Example: '-8,026'"
+      },
+      "Box20Code": {
+        "type": "string",
+        "method": "extract",
+        "description": "Box 20 'Other information' code identifier in Part III. Typically found as single letter code (like 'Z' for Section 199A information). Example: 'Z', 'STMT', 'X'"
+      },
+      "Box20Description": {
+        "type": "string",
+        "method": "extract",
+        "description": "Box 20 description text. For code Z (Section 199A), this describes the nature of the information reported. May include references to 'Section 199A', 'Qualified Business Income', etc."
+      },
+      "Box20Items": {
+        "type": "array",
+        "method": "generate",
+        "description": "Items listed under Box 20. For Section 199A (code Z), these include line items with descriptions and amounts. Extract each item as a separate object with description and amount.",
+        "items": {
+          "type": "object",
+          "method": "generate",
+          "description": "Individual Box 20 line item with description and amount",
+          "properties": {
+            "ItemDescription": {
+              "type": "string",
+              "method": "extract",
+              "description": "Description of the Box 20 line item. Examples: 'Rental income (loss)', 'Unadjusted basis of assets', 'Rent -', etc."
+            },
+            "ItemAmount": {
+              "type": "string",
+              "method": "extract",
+              "description": "Dollar amount for the Box 20 line item. Format: currency, may be negative. Examples: '-8,026', '209,183', '' (blank)"
+            }
+          }
+        }
+      },
+      "Schedule199AAttached": {
+        "type": "boolean",
+        "method": "extract",
+        "description": "Box 16 in Part III: Indicates whether Schedule K-3 is attached. Look for checkbox marked 'Schedule K-3 is attached if checked'. Expected values: true (checked) or false (unchecked)"
+      }
+    }
+  }
+}

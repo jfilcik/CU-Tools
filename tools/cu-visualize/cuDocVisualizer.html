@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document, PDF & Image Field Visualizer</title>
+  <style>
+    body { margin: 0; display: flex; height: 100vh; font-family: sans-serif; }
+    #viewerContainer { 
+      flex: 3; 
+      position: relative; 
+      overflow: hidden; /* Changed from auto to hidden to prevent scrollbars */
+      background: #ccc; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+    }
+    #pageControls {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.8);
+      padding: 8px;
+      border-radius: 4px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #pageControls button {
+      margin: 0 4px;
+      width: 40px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    #pageControls button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    /* Resizer styles */
+    #resizer {
+      width: 8px;
+      cursor: col-resize;
+      background: transparent;
+      position: relative;
+      z-index: 10;
+      transition: background 0.2s;
+    }
+    #resizer:hover, #resizer.active {
+      background: rgba(0, 102, 204, 0.4);
+    }
+    #resizer::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      height: 40px;
+      width: 2px;
+      background: #999;
+      border-radius: 1px;
+    }
+    #resizer:hover::before, #resizer.active::before {
+      background: #0066cc;
+    }
+    #sidebar { 
+      flex: 1; 
+      display: flex; 
+      flex-direction: column; 
+      padding: 10px; 
+      min-width: 200px; 
+      max-width: 80%;
+      overflow: hidden;
+    }
+    #fieldsList { flex: 1; overflow: auto; margin-bottom: 10px; }
+    #controls { margin-top: auto; border-top: 1px solid #ddd; padding-top: 10px; }
+    #controls label { display: flex; align-items: center; margin: 6px 0; }
+    #controls input[type=file] { flex: 1; }
+    #controls .filename { margin-left: 8px; font-style: italic; color: #555; text-overflow: ellipsis; overflow:hidden; white-space: nowrap; }
+    #controls small { display: block; margin-top: 6px; color: #555; }
+    #pdfCanvas { display: block; }
+    #imageContainer { display: none; position: relative; }
+    #documentImage { display: block; }
+    #overlay { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 10; }
+    /* Simplified bbox style - only for positioning the container */
+    .bbox { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+    .field-item { padding: 4px 5px; cursor: pointer; border-bottom: 1px solid #ddd; font-size: 14px; color: #000; }
+    .field-item .name { font-weight: bold; }
+    .field-item:hover { background: #f0f0f0; }
+    .generative::after { content: "GEN"; font-size: 7px; background: #8855dd; color: white; padding: 2px 2px; border-radius: 2px; margin-left: 6px; vertical-align: top;}
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    thead th { background: #f5f5f5; font-weight: bold; }
+    th, td { border: 1px solid #ddd; padding: 4px; font-size: 13px; color: #000; }
+    tbody tr:nth-child(odd) td { background: rgba(0, 0, 0, 0.03); }
+    tbody tr:nth-child(even) td { background: rgba(0, 0, 0, 0.06); }
+    tbody tr:hover td { background: rgba(0, 0, 0, 0.1); }
+    caption { text-align: left; font-weight: bold; margin: 6px 0; }
+    td { cursor: pointer; }
+    /* Style for numeric page buttons */
+    #pageControls button.page-btn {
+      /* Base styles for page buttons */
+      margin: 0 2px; /* Slightly reduced margin */
+      min-width: 30px; /* Ensure minimum width */
+      height: 30px; /* Slightly smaller */
+      padding: 0 5px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px; /* Slightly smaller */
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      vertical-align: top;
+    }
+    #pageControls button.page-btn.active {
+      border-bottom: 3px solid #0066cc;
+      font-weight: bold;
+    }
+    #pageControls button.page-btn.ellipsis {
+      width: 15px;
+      cursor: default;
+    }
+    #pageControls button:disabled:not(.ellipsis) { /* Exclude ellipsis from general disabled style */
+      opacity: 0.4;
+      cursor: default;
+    }
+    #fitViewBtn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255,255,255,0.8);
+      border: none;
+      border-radius: 4px;
+      padding: 8px;
+      cursor: pointer;
+      z-index: 20;
+    }
+    /* Test run controls */
+    #runControls {
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 10px;
+      margin-bottom: 6px;
+    }
+    #runControls .run-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    #runControls .run-header button {
+      min-width: 110px;
+    }
+    #runControls .run-info {
+      font-size: 12px;
+      color: #666;
+      margin: 2px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #runControls .run-info .label {
+      font-weight: bold;
+      color: #333;
+    }
+    #docNav {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    #docNav select {
+      flex: 1;
+      font-size: 13px;
+      padding: 4px 6px;
+      min-width: 0;
+    }
+    #docNav button {
+      width: 32px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      background: #f8f8f8;
+      cursor: pointer;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    #docNav button:hover:not(:disabled) {
+      background: #e0e0e0;
+    }
+    #docNav button:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+    #documentContainer {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform-origin: center center;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.min.js"></script>
+</head>
+<body>
+  <div id="viewerContainer">
+    <div id="documentContainer">
+      <canvas id="pdfCanvas"></canvas>
+      <div id="imageContainer">
+        <img id="documentImage" alt="Document Image">
+      </div>
+      <div id="overlay"></div>
+    </div>
+    <div id="pageControls">
+      <button id="firstBtn" title="First Page">⏮️</button>
+      <button id="prevBtn" title="Previous Page">◀️</button>
+      <span id="pageBtns"></span>
+      <button id="nextBtn" title="Next Page">▶️</button>
+      <button id="lastBtn" title="Last Page">⏭️</button>
+    </div>
+    <button id="fitViewBtn" title="Fit to View">🔍</button>
+  </div>
+  <div id="resizer" title="Drag to resize"></div>
+  <div id="sidebar">
+    <h2 style="display: flex; justify-content: space-between; align-items: center;">
+      Fields
+      <label style="font-weight: normal; font-size: 14px; display: flex; align-items: center;">
+        Only from current page<input type="checkbox" id="filterCurrent" checked style="margin-left: 5px;">
+      </label>
+    </h2>
+    <div id="fieldsList">Load a test run folder or individual files to view fields</div>
+    <div id="controls">
+      <div id="runControls">
+        <div class="run-header">
+          <input type="file" id="runFolderInput" webkitdirectory directory multiple style="display: none;">
+          <button type="button" onclick="document.getElementById('runFolderInput').click()">Select Test Run</button>
+          <span id="runName" class="filename">None</span>
+        </div>
+        <div id="runInfo" style="display: none;">
+          <div class="run-info"><span class="label">Analyzer:</span> <span id="runAnalyzerId"></span></div>
+          <div class="run-info"><span class="label">Results:</span> <span id="runStats"></span></div>
+        </div>
+        <div id="docNav">
+          <button id="docPrevBtn" title="Previous document" disabled>◀</button>
+          <select id="docSelect" title="Select document" disabled>
+            <option value="">(load a test run)</option>
+          </select>
+          <button id="docNextBtn" title="Next document" disabled>▶</button>
+        </div>
+      </div>
+      <small id="docMissingHint" style="display:none; color: #c55; margin-top: 4px;">Source doc not found in folder. Use buttons below or select a parent folder that includes samples/.</small>
+      <details style="margin-top: 6px;">
+        <summary style="cursor: pointer; font-size: 13px; color: #555;">Individual file pickers</summary>
+        <label style="margin-top: 6px;"><input type="file" id="pdfInput" accept="application/pdf,image/jpeg,image/png,image/jpg" style="display: none;"><button type="button" onclick="document.getElementById('pdfInput').click()" style="min-width: 120px;">Select Document</button><span id="pdfName" class="filename">None</span></label>
+        <label><input type="file" id="jsonInput" accept="application/json" style="display: none;"><button type="button" onclick="document.getElementById('jsonInput').click()" style="min-width: 120px;">Select JSON</button><span id="jsonName" class="filename">None</span></label>
+      </details>
+      <small>Or drag & drop Document/JSON here</small>
+    </div>
+  </div>
+  <script>
+    let pdfDoc = null, jsonData = null, currentPage = 1, viewport = null;
+    let currentScale = 1.0; // Track current zoom level
+    let isImage = false; // Track if the current document is an image
+    const boxes = {}; // Stores SVG polygon elements keyed by field name
+
+    // --- Test Run State ---
+    let runMetadata = null;   // Parsed metadata.json
+    let runFiles = {};        // Map of filename -> File object for all files in the run folder
+    let runDocFiles = {};     // Map of document filename -> File object for source docs
+    let currentDocIndex = -1; // Index into runMetadata.results
+
+    const pdfInput = document.getElementById('pdfInput');
+    const jsonInput = document.getElementById('jsonInput');
+    const pdfName = document.getElementById('pdfName');
+    const jsonName = document.getElementById('jsonName');
+    const filterCurrent = document.getElementById('filterCurrent');
+    const runFolderInput = document.getElementById('runFolderInput');
+    const runNameEl = document.getElementById('runName');
+    const runInfoEl = document.getElementById('runInfo');
+    const runAnalyzerIdEl = document.getElementById('runAnalyzerId');
+    const runStatsEl = document.getElementById('runStats');
+    const docSelect = document.getElementById('docSelect');
+    const docPrevBtn = document.getElementById('docPrevBtn');
+    const docNextBtn = document.getElementById('docNextBtn');
+    const docMissingHint = document.getElementById('docMissingHint');
+    const canvas = document.getElementById('pdfCanvas');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const fieldsList = document.getElementById('fieldsList');
+    const firstBtn = document.getElementById('firstBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const lastBtn = document.getElementById('lastBtn');
+    const pageBtns = document.getElementById('pageBtns');
+    const documentContainer = document.getElementById('documentContainer');
+    const imageContainer = document.getElementById('imageContainer');
+    const documentImage = document.getElementById('documentImage');
+    const fitViewBtn = document.getElementById('fitViewBtn');
+    const viewerContainer = document.getElementById('viewerContainer');
+    const resizer = document.getElementById('resizer');
+    const sidebar = document.getElementById('sidebar');
+
+    // Storage keys for user preferences
+    const STORAGE_KEY_FILTER = 'cuDocVisualizer_filterCurrent';
+    const STORAGE_KEY_SIDEBAR_WIDTH = 'cuDocVisualizer_sidebarWidth';
+
+    // --- PDF Worker Setup ---
+    (async () => {
+      try {
+        const resp = await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.worker.min.js');
+        const txt = await resp.text();
+        const blob = new Blob([txt], { type: 'application/javascript' });
+        pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+      } catch {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.js';
+      }
+    })();
+
+    // --- Helper functions ---
+    /**
+     * Converts field to string value based on its type
+     * @param {Object} field - Field object with type property
+     * @return {string|Object} - String value for simple types, object for complex types
+     */
+    function fieldToString(field) {
+      if (!field || !field.type) return '';
+      
+      // Handle array type
+      if (field.type === 'array' && Array.isArray(field.valueArray)) {
+        return field.valueArray.map(item => {
+          if (item.valueObject) {
+            // Convert each object in the array
+            const result = {};
+            Object.entries(item.valueObject).forEach(([key, subField]) => {
+              result[key] = fieldToString(subField);
+            });
+            return result;
+          }
+          return fieldToString(item); // Handle simple types in array
+        });
+      }
+      
+      // Handle object type
+      if (field.type === 'object' && field.valueObject) {
+        const result = {};
+        Object.entries(field.valueObject).forEach(([key, subField]) => {
+          result[key] = fieldToString(subField);
+        });
+        return result;
+      }
+      
+      // Handle primitive types
+      const valueFieldName = 'value' + field.type.charAt(0).toUpperCase() + field.type.slice(1);
+      return field[valueFieldName] ?? '';
+    }
+
+    // --- Event Listeners ---
+    pdfInput.addEventListener('change', e => {
+      const f = e.target.files[0]; if (f) loadDocument(f);
+    });
+    jsonInput.addEventListener('change', e => {
+      const f = e.target.files[0]; if (f) loadJSON(f);
+    });
+    runFolderInput.addEventListener('change', e => {
+      if (e.target.files.length) loadTestRun(e.target.files);
+    });
+    docSelect.addEventListener('change', () => {
+      const idx = parseInt(docSelect.value, 10);
+      if (!isNaN(idx)) navigateToDoc(idx);
+    });
+    docPrevBtn.addEventListener('click', () => {
+      if (currentDocIndex > 0) navigateToDoc(currentDocIndex - 1);
+    });
+    docNextBtn.addEventListener('click', () => {
+      if (runMetadata && currentDocIndex < runMetadata.results.length - 1)
+        navigateToDoc(currentDocIndex + 1);
+    });
+    filterCurrent.addEventListener('change', () => {
+      // Save filter preference to localStorage
+      localStorage.setItem(STORAGE_KEY_FILTER, filterCurrent.checked);
+      // Re-render boxes and sidebar when filter changes
+      if ((pdfDoc || isImage) && jsonData) {
+        drawBoxes();
+        populateSidebar();
+      }
+    });
+
+    document.addEventListener('dragover', e => e.preventDefault());
+    document.addEventListener('drop', e => {
+      e.preventDefault();
+      const files = e.dataTransfer.files;
+      if (!files.length) return;
+      
+      // Process all dropped files
+      for (const f of files) {
+        if (f.type === 'application/pdf' || f.name.match(/\.pdf$/i)) loadDocument(f);
+        else if (f.type.startsWith('image/') || f.name.match(/\.(jpe?g|png)$/i)) loadDocument(f);
+        else if (f.type === 'application/json' || f.name.match(/\.json$/i)) loadJSON(f);
+      }
+    });
+
+    firstBtn.onclick = () => gotoPage(1);
+    prevBtn.onclick = () => gotoPage(currentPage - 1);
+    nextBtn.onclick = () => gotoPage(currentPage + 1);
+    lastBtn.onclick = () => gotoPage(pdfDoc?.numPages || 1);
+    fitViewBtn.onclick = () => fitToView();
+
+    // --- Zoom with Mouse Wheel ---
+    viewerContainer.addEventListener('wheel', e => {
+      e.preventDefault();
+      
+      // Get mouse position relative to document container
+      const rect = documentContainer.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // Calculate position ratios (0-1) before zoom
+      const ratioX = mouseX / (rect.width);
+      const ratioY = mouseY / (rect.height);
+      
+      // Determine zoom direction and factor
+      const delta = -Math.sign(e.deltaY);
+      const zoomFactor = 1.1; // 10% zoom per step
+      const newScale = delta > 0 
+        ? currentScale * zoomFactor 
+        : currentScale / zoomFactor;
+      
+      // Apply limits to scale
+      const limitedScale = Math.min(Math.max(newScale, 0.1), 10.0);
+      
+      // Only update if the scale has actually changed
+      if (limitedScale !== currentScale) {
+        currentScale = limitedScale;
+        applyZoomAndPan();
+      }
+    });
+
+    // --- Resizer Interaction ---
+    let isResizing = false;
+    let initialX, initialWidth;
+
+    resizer.addEventListener('mousedown', e => {
+      // Store initial mouse position and sidebar width when starting resize
+      initialX = e.clientX;
+      initialWidth = sidebar.getBoundingClientRect().width;
+      isResizing = true;
+      resizer.classList.add('active');
+      document.body.style.cursor = 'col-resize';
+      e.preventDefault(); // Prevent text selection during drag
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!isResizing) return;
+      
+      // Calculate the distance moved from the initial position
+      // We negate deltaX because moving right should decrease sidebar width
+      // Moving left should increase it (since sidebar is on the right side)
+      const deltaX = initialX - e.clientX;
+      
+      // Apply the new width based on the initial width and the mouse movement
+      // Use Math.max/min to enforce minimum and maximum width constraints
+      const newWidth = Math.min(
+        Math.max(initialWidth + deltaX, 200), // Minimum width: 200px
+        window.innerWidth * 0.8              // Maximum width: 80% of window
+      );
+      
+      // Set the sidebar width using flex-basis
+      sidebar.style.flex = '0 0 auto';
+      sidebar.style.width = `${newWidth}px`;
+
+      // Save sidebar width to localStorage
+      localStorage.setItem(STORAGE_KEY_SIDEBAR_WIDTH, newWidth);
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        resizer.classList.remove('active');
+        document.body.style.cursor = '';
+      }
+    });
+
+    // --- Core Functions ---
+    async function loadDocument(file) {
+      try {
+        pdfName.textContent = file.name;
+        
+        // Check if it's an image or PDF
+        if (file.type.startsWith('image/') || file.name.match(/\.(jpe?g|png)$/i)) {
+          // Handle image file
+          isImage = true;
+          pdfDoc = null;
+          
+          // Display image container, hide PDF canvas
+          canvas.style.display = 'none';
+          imageContainer.style.display = 'block';
+          
+          // Load the image
+          const imageUrl = URL.createObjectURL(file);
+          documentImage.src = imageUrl;
+          
+          // Set up page controls for images (single page)
+          currentPage = 1;
+          
+          // Wait for image to load before setting dimensions
+          documentImage.onload = () => {
+            viewport = {
+              width: documentImage.naturalWidth,
+              height: documentImage.naturalHeight
+            };
+            
+            // Size the overlay to match the image
+            overlay.style.width = viewport.width + 'px';
+            overlay.style.height = viewport.height + 'px';
+            
+            // Position the overlay over the image
+            overlay.style.position = 'absolute';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            
+            // Update UI elements
+            updateNavButtons();
+            renderPageButtons();
+            
+            // Draw boxes if JSON is loaded
+            if (jsonData) {
+              drawBoxes();
+              populateSidebar();
+            }
+            
+            // Fit to view after loading
+            fitToView();
+          };
+        } else {
+          // Handle PDF file
+          isImage = false;
+          pdfDoc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+          
+          // Display PDF canvas, hide image container
+          canvas.style.display = 'block';
+          imageContainer.style.display = 'none';
+          
+          // Set up page and render
+          currentPage = 1;
+          await renderPage(currentPage);
+          renderPageButtons();
+          updateNavButtons();
+          
+          // Fit to view after loading
+          fitToView();
+        }
+      } catch (err) {
+        console.error("Document Load Error:", err);
+        alert('Failed to load document');
+      }
+    }
+
+    async function loadJSON(file) {
+      try {
+        jsonData = JSON.parse(await file.text());
+        jsonName.textContent = file.name;
+        
+        // Create a blank canvas if no document is loaded but JSON is
+        if (!pdfDoc && !isImage && jsonData) {
+          // Set default dimensions for canvas when no document is loaded
+          const defaultWidth = 800;
+          const defaultHeight = 1000;
+          
+          isImage = false; // Not an image
+          currentPage = 1; // Default to page 1
+          
+          // Setup basic viewport
+          viewport = {
+            width: defaultWidth,
+            height: defaultHeight
+          };
+          
+          // Display PDF canvas, hide image container
+          canvas.style.display = 'block';
+          imageContainer.style.display = 'none';
+          
+          // Size the canvas
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          
+          // Clear the canvas with a light gray background
+          ctx.fillStyle = '#f0f0f0';
+          ctx.fillRect(0, 0, viewport.width, viewport.height);
+          
+          // Add some text to indicate no document
+          ctx.fillStyle = '#999999';
+          ctx.font = '24px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('No document loaded - JSON only view', viewport.width/2, viewport.height/2);
+          
+          // Size the overlay
+          overlay.style.width = viewport.width + 'px';
+          overlay.style.height = viewport.height + 'px';
+          
+          // Update controls
+          updateNavButtons();
+          renderPageButtons();
+          
+          // Now populate UI with JSON data
+          drawBoxes();
+          populateSidebar();
+          
+          // Fit to view
+          fitToView();
+        } else if (pdfDoc || isImage) {
+          // If document is already loaded, update with JSON
+          drawBoxes();
+          populateSidebar();
+        }
+      } catch (err) {
+        console.error("JSON Load Error:", err);
+        alert('Invalid JSON');
+      }
+    }
+
+    async function renderPage(pageNum) {
+      if (!pdfDoc || isImage) return;
+      const page = await pdfDoc.getPage(pageNum);
+      viewport = page.getViewport({ scale: 3.0 }); // Default scale, will be adjusted by fitToView
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      overlay.style.width = viewport.width + 'px';
+      overlay.style.height = viewport.height + 'px';
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      if (jsonData) {
+        drawBoxes();
+        populateSidebar();
+      }
+      updateNavButtons(); // Update nav buttons after page render
+    }
+
+    function gotoPage(n) {
+      if (!pdfDoc && !isImage) return;
+      
+      // For images, there's only one page
+      if (isImage) {
+        currentPage = 1;
+        return;
+      }
+      
+      const pg = Math.min(Math.max(1, n), pdfDoc.numPages);
+      if (pg !== currentPage) {
+        currentPage = pg;
+        renderPage(pg);
+        renderPageButtons(); // Update numeric buttons
+      }
+    }
+
+    // --- Zoom and Pan Functions ---
+    function fitToView() {
+      if (!viewport) return;
+      
+      // Get container dimensions with some padding
+      const padding = 40; // 20px on each side
+      const containerWidth = viewerContainer.clientWidth - padding;
+      const containerHeight = viewerContainer.clientHeight - padding;
+      
+      // Calculate scale to fit both dimensions
+      const scaleX = containerWidth / viewport.width;
+      const scaleY = containerHeight / viewport.height;
+      
+      // Use the smaller scale to ensure the entire document is visible
+      currentScale = Math.min(scaleX, scaleY);
+      
+      // Apply the zoom and center the document
+      applyZoomAndPan();
+      
+      // Log useful debug info
+      console.log(`Fit to view: ${viewport.width}x${viewport.height} in ${containerWidth}x${containerHeight} => scale ${currentScale}`);
+    }
+    
+    function applyZoomAndPan() {
+      if (!viewport) return;
+      
+      // Reset positioning to get accurate measurements
+      documentContainer.style.margin = '0';
+      documentContainer.style.position = 'absolute';
+      documentContainer.style.left = '50%';
+      documentContainer.style.top = '50%';
+      
+      // Set width and height of the document container to match the viewport
+      documentContainer.style.width = `${viewport.width}px`;
+      documentContainer.style.height = `${viewport.height}px`;
+      
+      // Center using transform with translate
+      // This properly centers the element before applying scale
+      documentContainer.style.transform = `translate(-50%, -50%) scale(${currentScale})`;
+      
+      // Log positioning info for debugging
+      console.log(`Applied zoom: scale=${currentScale}, document=${viewport.width}x${viewport.height}`);
+    }
+    
+    // Center after window resize
+    window.addEventListener('resize', () => {
+      if (viewport) {
+        applyZoomAndPan();
+      }
+    });
+
+    // --- UI Update Functions ---
+    function updateNavButtons() {
+      // For images, disable all page navigation buttons
+      if (isImage) {
+        firstBtn.disabled = true;
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        lastBtn.disabled = true;
+        return;
+      }
+      
+      const numPages = pdfDoc?.numPages || 1;
+      firstBtn.disabled = currentPage === 1;
+      prevBtn.disabled = currentPage === 1;
+      nextBtn.disabled = currentPage === numPages;
+      lastBtn.disabled = currentPage === numPages;
+    }
+
+    function renderPageButtons() {
+      pageBtns.innerHTML = '';
+      
+      // For images, hide page buttons
+      if (isImage) {
+        pageBtns.style.display = 'none';
+        return;
+      } else {
+        pageBtns.style.display = 'inline-block';
+      }
+      
+      if (!pdfDoc) return;
+      const total = pdfDoc.numPages;
+      let start, end;
+      
+      // Calculate the page range to display (always showing 5 or fewer pages)
+      if (total <= 5) {
+        start = 1; end = total;
+      } else if (currentPage <= 3) {
+        start = 1; end = 5;
+      } else if (currentPage >= total - 2) {
+        start = total - 4; end = total;
+      } else {
+        start = currentPage - 2; end = currentPage + 2;
+      }
+      
+      // Add left ellipsis - ALWAYS create with same dimensions
+      const leftEllipsis = document.createElement('button');
+      leftEllipsis.classList.add('page-btn', 'ellipsis');
+      leftEllipsis.disabled = true;
+      leftEllipsis.textContent = start > 1 ? '...' : ' ';
+      leftEllipsis.title = start > 1 ? 'Previous pages' : '';
+      pageBtns.appendChild(leftEllipsis);
+      
+      // Add page number buttons
+      for (let p = start; p <= end; p++) {
+        const btn = document.createElement('button');
+        btn.textContent = p;
+        btn.classList.add('page-btn');
+        if (p === currentPage) {
+          btn.classList.add('active');
+        } else {
+          btn.onclick = () => gotoPage(p);
+        }
+        pageBtns.appendChild(btn);
+      }
+      
+      // Add right ellipsis - ALWAYS create with same dimensions
+      const rightEllipsis = document.createElement('button');
+      rightEllipsis.classList.add('page-btn', 'ellipsis');
+      rightEllipsis.disabled = true;
+      rightEllipsis.textContent = end < total ? '...' : ' ';
+      rightEllipsis.title = end < total ? 'More pages' : '';
+      pageBtns.appendChild(rightEllipsis);
+    }
+
+    // --- Data Handling Helpers ---
+    function getContents() {
+      if (!jsonData) return [];
+      if (Array.isArray(jsonData.contents)) return jsonData.contents;
+      if (jsonData.result && Array.isArray(jsonData.result.contents)) return jsonData.result.contents;
+      return [];
+    }
+
+    // Parses D(...) source string into array of [page, x1, y1, x2, y2, x3, y3, x4, y4] coordinates
+    // Now supports multiple bounding boxes separated by semicolons
+    function parseSource(sourceString) {
+      if (!sourceString) return null;
+      
+      // Check if we have multiple boxes (separated by semicolons)
+      const boxes = sourceString.split(';').filter(box => box.trim() !== '');
+      if (boxes.length === 0) return null;
+      
+      // Parse each D(...) bounding box
+      return boxes.map(box => {
+        const match = box.match(/D\(([^)]+)\)/);
+        return match ? match[1].split(',').map(Number) : null;
+      }).filter(box => box !== null); // Filter out any invalid boxes
+    }
+
+    function hashColor(key) {
+      const base = key.replace(/\[\d+\]/g, '');
+      let h = 0;
+      for (const ch of base) h = ch.charCodeAt(0) + ((h << 5) - h);
+      const hue = ((h % 360) + 360) % 360;
+      return `hsla(${hue},70%,50%,0.2)`; 
+    }
+
+    // --- Drawing and Sidebar Population ---
+    function drawBoxes() {
+      overlay.innerHTML = '';
+      Object.keys(boxes).forEach(k => delete boxes[k]); // Clear stored boxes
+      const contents = getContents();
+      if (!contents.length || !contents[0].fields) return;
+      const fields = contents[0].fields;
+      
+      // For images, we assume page 1 for all boxes
+      const documentPage = isImage ? 1 : currentPage;
+      
+      const pageMeta = contents[0].pages?.find(p => p.pageNumber === documentPage)
+        || { width: viewport.width, height: viewport.height }; // Fallback if page meta missing
+      const sx = viewport.width / pageMeta.width;
+      const sy = viewport.height / pageMeta.height;
+
+      Object.entries(fields).forEach(([key, field]) => {
+        // Handle array fields
+        if (field.type === 'array' && Array.isArray(field.valueArray)) {
+          field.valueArray.forEach((item, i) => {
+            Object.entries(item.valueObject || {}).forEach(([subKey, subField]) => {
+              if (subField.source) {
+                const nums = parseSource(subField.source);
+                if (nums && (isImage || nums[0][0] === documentPage)) {
+                  const fullKey = `${key}[${i}].${subKey}`;
+                  createBoxElement(fullKey, nums, sx, sy);
+                }
+              }
+            });
+          });
+        }
+        // Handle regular fields
+        else if (field.source) {
+          const nums = parseSource(field.source);
+          if (nums && (isImage || nums[0][0] === documentPage)) {
+            createBoxElement(key, nums, sx, sy);
+          }
+        }
+      });
+    }
+
+    // Creates the SVG polygon element for a field
+    function createBoxElement(key, current_boxes, sx, sy) {
+      const c = hashColor(key);
+      
+      // Create container div (minimal style, just for positioning)
+      const boxContainer = document.createElement('div');
+      boxContainer.className = 'bbox'; // Uses the simplified .bbox style
+
+      // Create SVG element
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.style.position = "absolute";
+      svg.style.top = "0";
+      svg.style.left = "0";
+      svg.style.width = "100%";
+      svg.style.height = "100%";
+      
+      // Store reference to the last polygon (for highlighting)
+      let lastPolygon = null;
+      
+      // Process each bounding box in the array
+      current_boxes.forEach(nums => {
+        // Each nums is [page, x1, y1, x2, y2, x3, y3, x4, y4]
+        // Skip this box if it's not for the current page
+        if (!isImage && nums[0] !== currentPage) return;
+        
+        const xs = [nums[1], nums[3], nums[5], nums[7]];
+        const ys = [nums[2], nums[4], nums[6], nums[8]];
+
+        // Scale points to viewport size
+        const points = [];
+        for (let i = 0; i < 4; i++) {
+          points.push(xs[i] * sx);
+          points.push(ys[i] * sy);
+        }
+
+        // Create polygon with the 4 corner points
+        const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+        polygon.setAttribute("points",
+          `${points[0]},${points[1]} ${points[2]},${points[3]} ${points[4]},${points[5]} ${points[6]},${points[7]}`
+        );
+        polygon.setAttribute("fill", c); // Base fill color
+        polygon.setAttribute("stroke", c); // Base stroke color
+        polygon.setAttribute("stroke-width", "1");
+        polygon.setAttribute("data-key", key); // Reference key
+
+        svg.appendChild(polygon);
+        lastPolygon = polygon; // Keep track of the last polygon we created
+      });
+      
+      // If we created any polygons, add the SVG to the document
+      if (lastPolygon) {
+        boxContainer.appendChild(svg);
+        overlay.appendChild(boxContainer);
+        boxes[key] = lastPolygon; // Store reference to the last polygon for highlighting
+                                // This allows highlighting to work on at least one of the polygons
+      }
+    }
+
+    // Sets up hover highlighting for sidebar items and table cells
+    function setupHighlighting(element, key) {
+      const polygon = boxes[key]; // Get the corresponding SVG polygon
+      if (!polygon) return; // No box drawn for this key (e.g., filtered out)
+
+      // Get all related polygons (those with the same data-key attribute)
+      const relatedPolygons = document.querySelectorAll(`polygon[data-key="${key}"]`);
+      if (relatedPolygons.length === 0) return;
+      
+      // Use the base color of the first polygon
+      const baseColor = polygon.getAttribute('fill');
+      const highlightColor = baseColor.replace('0.2', '0.6'); // Make highlight more opaque
+
+      element.addEventListener('mouseenter', () => {
+        // Highlight sidebar/table item
+        element.style.backgroundColor = baseColor;
+        
+        // Highlight all related polygons
+        relatedPolygons.forEach(poly => {
+          poly.setAttribute('fill', highlightColor);
+          poly.setAttribute('stroke', '#0066cc'); // Use a distinct stroke color
+          poly.setAttribute('stroke-width', '2');
+        });
+      });
+
+      element.addEventListener('mouseleave', () => {
+        // Remove sidebar/table item highlight
+        element.style.backgroundColor = '';
+        
+        // Return all related polygons to normal state
+        relatedPolygons.forEach(poly => {
+          poly.setAttribute('fill', baseColor);
+          poly.setAttribute('stroke', baseColor);
+          poly.setAttribute('stroke-width', '1');
+        });
+      });
+    }
+
+    // Creates a single sidebar item element
+    function createSidebarItem(key, value, source) {
+      const nums = parseSource(source);
+      const hasSource = !!nums;
+      
+      // Apply filtering based on checkbox and current page
+      // For images, always show all items if not filtered
+      if (hasSource && filterCurrent.checked && (!nums || (!isImage && nums[0][0] !== currentPage))) {
+        return null; // Don't create item if filtered out
+      }
+
+      const div = document.createElement('div');
+      div.className = 'field-item';
+      // Add generative class if no source/bounding box
+      if (!hasSource) {
+        div.classList.add('generative');
+      }
+      
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'name';
+      nameSpan.textContent = key + ': '; // Add space for readability
+      const valueSpan = document.createElement('span');
+      valueSpan.textContent = value;
+
+      div.appendChild(nameSpan);
+      div.appendChild(valueSpan);
+      
+      // Only setup highlighting if the field has a bounding box
+      if (hasSource) {
+        setupHighlighting(div, key);
+      }
+      
+      return div;
+    }
+
+    function populateSidebar() {
+      fieldsList.innerHTML = ''; // Clear previous content
+      const contents = getContents();
+      if (!contents.length || !contents[0].fields) {
+        fieldsList.textContent = 'No fields data found in JSON.';
+        return;
+      }
+      const fields = contents[0].fields;
+      let itemsAdded = 0;
+
+      Object.entries(fields).forEach(([key, field]) => {
+        // Handle array fields (render as tables)
+        if (field.type === 'array' && Array.isArray(field.valueArray)) {
+          const tableElement = renderTable(key, field.valueArray);
+          if (tableElement) {
+            fieldsList.appendChild(tableElement);
+            itemsAdded++;
+          }
+        }
+        // Type = 'objects' are not handled correctly here.
+        else if (field.type) {
+          const value = fieldToString(field); // Access the value property dynamically
+          if (value) {
+            const itemElement = createSidebarItem(key, value, field.source);
+            if (itemElement) {
+              fieldsList.appendChild(itemElement);
+              itemsAdded++;
+            }
+          }
+        }
+      });
+
+      if (itemsAdded === 0) {
+        fieldsList.textContent = filterCurrent.checked
+          ? 'No fields found for the current page.'
+          : 'No fields with values found.';
+      }
+    }
+
+    // Renders a table for an array field, returns null if no rows after filtering
+    function renderTable(name, arr) {
+      const rowsData = arr.map(item => item.valueObject || {});
+      if (!rowsData.length) return null;
+
+      // Determine columns based on available data across all rows - include fields without source
+      const allCols = new Set();
+      rowsData.forEach(row => {
+        Object.keys(row).forEach(colKey => {
+          const value = fieldToString(row[colKey]); // Access the value property dynamically
+          if (row[colKey] && (value)) {
+            allCols.add(colKey);
+          }
+        });
+      });
+      const cols = Array.from(allCols);
+      if (!cols.length) return null;
+
+      const tbl = document.createElement('table');
+      tbl.createCaption().textContent = `${name} (${arr.length})`;
+      const thead = tbl.createTHead();
+      const headerRow = thead.insertRow();
+      cols.forEach(c => {
+        const th = document.createElement('th');
+        th.textContent = c;
+        headerRow.appendChild(th);
+      });
+
+      const tbody = tbl.createTBody();
+      let rowsAdded = 0;
+      arr.forEach((item, i) => {
+        const rowObject = item.valueObject || {};
+        
+        // Changed to also show rows with generative fields (no source)
+        const hasGenerativeFields = cols.some(c => {
+          const subField = rowObject[c];
+          return subField && !subField.source;
+        });
+        
+        // Check if *any* cell in this row should be displayed based on the filter
+        const hasSourcedFields = !filterCurrent.checked || isImage || cols.some(c => {
+          const subField = rowObject[c];
+          if (!subField || !subField.source) return false;
+          const nums = parseSource(subField.source);
+          return nums && nums[0][0] === currentPage;
+        });
+
+        if (hasSourcedFields || hasGenerativeFields) {
+          const bodyRow = tbody.insertRow();
+          rowsAdded++;
+          cols.forEach(c => {
+            const cell = bodyRow.insertCell();
+            const subField = rowObject[c];
+            
+            if (subField) {
+              const value = fieldToString(subField); // Access the value property dynamically
+              cell.textContent = value;
+              
+              // Add AI indicator for generative fields without source
+              if (value && !subField.source) {
+                cell.classList.add('generative');
+              }
+              
+              if (subField.source) { // Only setup highlighting if source exists
+                const key = `${name}[${i}].${c}`;
+                setupHighlighting(cell, key);
+              }
+            }
+          });
+        }
+      });
+
+      // Return null if no rows were actually added after filtering
+      return rowsAdded > 0 ? tbl : null;
+    }
+
+    // === Test Run Loading ===
+
+    /**
+     * Load a test run from a folder selection.
+     * Expects the folder to contain metadata.json, result JSONs, and optionally source docs.
+     */
+    async function loadTestRun(fileList) {
+      // Index all files by their relative path and base name
+      runFiles = {};
+      runDocFiles = {};
+      let metadataFile = null;
+
+      for (const file of fileList) {
+        const relPath = file.webkitRelativePath || file.name;
+        const baseName = relPath.split('/').pop();
+        runFiles[baseName] = file;
+
+        if (baseName === 'metadata.json') {
+          metadataFile = file;
+        }
+      }
+
+      if (!metadataFile) {
+        alert('No metadata.json found in the selected folder. Please select a test run output folder.');
+        return;
+      }
+
+      try {
+        runMetadata = JSON.parse(await metadataFile.text());
+      } catch (err) {
+        alert('Failed to parse metadata.json: ' + err.message);
+        return;
+      }
+
+      // Show run info
+      const folderName = (metadataFile.webkitRelativePath || '').split('/').slice(0, -1).pop() || 'test_run';
+      runNameEl.textContent = folderName;
+      runAnalyzerIdEl.textContent = runMetadata.analyzer_id || '—';
+      runStatsEl.textContent = `${runMetadata.successful || 0}/${runMetadata.document_count || 0} succeeded, ${runMetadata.iterations || 1} iter`;
+      runInfoEl.style.display = 'block';
+
+      // Try to find source documents in the folder tree
+      // They might be in a sibling "samples" folder if the user selected the parent
+      for (const file of fileList) {
+        const name = file.name.toLowerCase();
+        if (name.endsWith('.pdf') || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.tiff')) {
+          runDocFiles[file.name] = file;
+        }
+      }
+
+      // Populate the document dropdown
+      populateDocDropdown();
+
+      // Auto-navigate to the first document
+      if (runMetadata.results && runMetadata.results.length > 0) {
+        navigateToDoc(0);
+      }
+    }
+
+    /**
+     * Populate the document selector dropdown from run metadata.
+     */
+    function populateDocDropdown() {
+      docSelect.innerHTML = '';
+      if (!runMetadata || !runMetadata.results) return;
+
+      runMetadata.results.forEach((result, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        // Show iteration info if multiple iterations
+        const iterLabel = (runMetadata.iterations > 1) ? ` (iter ${result.iteration})` : '';
+        const statusIcon = result.status === 'success' ? '✓' : '✗';
+        opt.textContent = `${statusIcon} ${result.document}${iterLabel}`;
+        docSelect.appendChild(opt);
+      });
+      docSelect.disabled = false;
+    }
+
+    /**
+     * Navigate to a specific document index in the run results.
+     * Loads both the result JSON and the source document if available.
+     */
+    async function navigateToDoc(idx) {
+      if (!runMetadata || !runMetadata.results) return;
+      if (idx < 0 || idx >= runMetadata.results.length) return;
+
+      currentDocIndex = idx;
+      docSelect.value = idx;
+
+      // Update prev/next buttons
+      docPrevBtn.disabled = (idx === 0);
+      docNextBtn.disabled = (idx === runMetadata.results.length - 1);
+
+      const result = runMetadata.results[idx];
+
+      // Load the result JSON
+      const jsonFile = runFiles[result.result_file];
+      if (jsonFile) {
+        await loadJSON(jsonFile);
+      } else {
+        console.warn('Result JSON not found in folder:', result.result_file);
+      }
+
+      // Load the source document
+      const docFile = runDocFiles[result.document] || runFiles[result.document];
+      if (docFile) {
+        await loadDocument(docFile);
+        docMissingHint.style.display = 'none';
+      } else {
+        docMissingHint.style.display = 'block';
+        console.warn('Source document not found in folder:', result.document,
+          '\nTip: Select the parent folder that contains both the test_results and samples folders.');
+      }
+    }
+
+    // Keyboard shortcuts for document navigation
+    document.addEventListener('keydown', e => {
+      if (!runMetadata) return;
+      // Don't capture if user is typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
+      if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (currentDocIndex > 0) navigateToDoc(currentDocIndex - 1);
+      } else if (e.altKey && e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (currentDocIndex < runMetadata.results.length - 1) navigateToDoc(currentDocIndex + 1);
+      }
+    });
+
+    // Initialize fit to view after load
+    window.addEventListener('DOMContentLoaded', () => {
+      // Restore filter preference from localStorage
+      const savedFilter = localStorage.getItem(STORAGE_KEY_FILTER);
+      if (savedFilter !== null) {
+        filterCurrent.checked = savedFilter === 'true';
+      }
+
+      // Restore sidebar width from localStorage
+      const savedSidebarWidth = localStorage.getItem(STORAGE_KEY_SIDEBAR_WIDTH);
+      if (savedSidebarWidth !== null) {
+        sidebar.style.flex = '0 0 auto';
+        sidebar.style.width = `${savedSidebarWidth}px`;
+      }
+    });
+
+  </script>
+</body>
+</html>

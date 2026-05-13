@@ -1,0 +1,2 @@
+# CU Results Export Tool Dependencies
+openpyxl>=3.1.0

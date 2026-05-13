@@ -1,0 +1,72 @@
+{
+  "description": "Analyze video content to detect scenes, objects, and activities with keyframe-anchored timestamps. Designed for general video analysis with temporal grounding.",
+  "baseAnalyzerId": "prebuilt-video",
+  "config": {
+    "returnDetails": true,
+    "locales": ["en-US"],
+    "disableContentFiltering": true
+  },
+  "fieldSchema": {
+    "fields": {
+      "VideoSummary": {
+        "type": "string",
+        "method": "generate",
+        "description": "A comprehensive 2-3 sentence summary of the entire video content. Describe the main subject, key activities, and overall theme or purpose of the video."
+      },
+      "Scenes": {
+        "type": "array",
+        "method": "generate",
+        "description": "Identify the major distinct scenes or segments in the video. A scene changes when the camera angle, location, subject, or activity changes significantly. For each scene, report the start time and a description. CRITICAL: The startTime MUST be copied exactly from one of the keyframe timestamps in the Key Frames list (format: hh:mm:ss.ms). Do NOT interpolate or estimate timestamps.",
+        "items": {
+          "type": "object",
+          "description": "A single scene or segment in the video, defined by a change in camera angle, location, subject, or activity.",
+          "properties": {
+            "startTime": {
+              "type": "string",
+              "method": "generate",
+              "description": "The exact timestamp when this scene begins, copied directly from the Key Frames list. Format: hh:mm:ss.ms (e.g., '00:00:06.375'). MUST match a keyframe timestamp exactly."
+            },
+            "sceneDescription": {
+              "type": "string",
+              "method": "generate",
+              "description": "A concise description of what happens in this scene — the setting, subjects, actions, and any notable visual elements."
+            }
+          }
+        }
+      },
+      "DetectedObjects": {
+        "type": "array",
+        "method": "generate",
+        "description": "Identify all distinct physical objects, products, brand logos, and notable items visible in the video. For each object, report its name and the exact keyframe timestamp where it first appears. CRITICAL: The firstSeen timestamp MUST be copied exactly from a keyframe timestamp in the Key Frames list.",
+        "items": {
+          "type": "object",
+          "description": "A single detected object, product, brand logo, or notable item visible in the video.",
+          "properties": {
+            "name": {
+              "type": "string",
+              "method": "generate",
+              "description": "The name or label of the detected object (e.g., 'airplane', 'mountain range', 'control panel')."
+            },
+            "firstSeen": {
+              "type": "string",
+              "method": "generate",
+              "description": "The exact keyframe timestamp where the object first appears. Format: hh:mm:ss.ms. MUST match a keyframe timestamp exactly."
+            }
+          }
+        }
+      },
+      "Sentiment": {
+        "type": "string",
+        "method": "classify",
+        "description": "The overall emotional tone or sentiment conveyed by the video content based on visuals, audio, and pacing.",
+        "enum": ["Exciting", "Informational", "Calm", "Dramatic", "Humorous"]
+      },
+      "ContentCategory": {
+        "type": "string",
+        "method": "classify",
+        "description": "The primary content category that best describes this video.",
+        "enum": ["Gaming", "Educational", "Marketing", "Entertainment", "News", "Tutorial", "Documentary"]
+      }
+    }
+  }
+}

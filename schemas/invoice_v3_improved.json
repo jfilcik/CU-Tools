@@ -1,0 +1,81 @@
+{
+  "description": "Invoice analyzer - Version 3.0 following Azure Content Understanding best practices",
+  "baseAnalyzerId": "prebuilt-invoice",
+  "scenario": "document",
+  "config": {
+    "returnDetails": true,
+    "estimateFieldSourceAndConfidence": true
+  },
+  "models": {
+    "completion": "gpt-4.1"
+  },
+  "fieldSchema": {
+    "fields": {
+      "VendorName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The name of the company or vendor issuing the invoice, typically found at the top of the document near the logo. May appear with labels like 'From:', 'Vendor:', 'Supplier:', 'Seller:', or as a prominent company header. Extract the full legal business name. Examples: 'Acme Corporation', 'Tech Solutions Inc.', 'Global Services LLC'",
+        "estimateSourceAndConfidence": true
+      },
+      "VendorAddress": {
+        "type": "string",
+        "method": "extract",
+        "description": "The full mailing address of the vendor/supplier, typically found in the header section near the vendor name. May include street, city, state/province, postal code, and country. Also disclosed as 'Seller Address', 'From Address', or 'Return Address'. Examples: '123 Main St, Springfield, IL 62701', '456 Market Street, Suite 100, San Francisco, CA 94102'",
+        "estimateSourceAndConfidence": true
+      },
+      "InvoiceNumber": {
+        "type": "string",
+        "method": "extract",
+        "description": "The unique invoice identifier, typically found in the top-right section near labels like 'Invoice #', 'Invoice Number', 'Inv No.', 'Invoice ID', or '#'. Format is usually alphanumeric, often with a prefix. Examples: 'INV-2024-001', '#12345', 'INVOICE-789', '20240115-001'",
+        "estimateSourceAndConfidence": true
+      },
+      "InvoiceDate": {
+        "type": "string",
+        "method": "extract",
+        "description": "The date when the invoice was issued, typically found at the top right corner near the invoice number. May be labeled as 'Invoice Date', 'Billing Date', 'Date', 'Issue Date', or 'Created Date'. Format is usually MM/DD/YYYY, DD-MM-YYYY, or YYYY-MM-DD. Do NOT extract the due date or payment date. Examples: '01/15/2024', '2024-01-15', '15-Jan-2024', 'January 15, 2024'",
+        "estimateSourceAndConfidence": true
+      },
+      "TotalAmount": {
+        "type": "number",
+        "method": "extract",
+        "description": "The final total amount due after all taxes, discounts, and fees. Usually found in the bottom section near labels like 'Total', 'Total Due', 'Amount Due', 'Balance Due', 'Grand Total', or 'Total Amount'. This should be the largest/final amount on the invoice, NOT subtotals, tax amounts, or individual line item amounts. Extract as a number without currency symbols. Examples: 1234.56, 5000.00, 299.99",
+        "estimateSourceAndConfidence": true
+      },
+      "LineItems": {
+        "type": "array",
+        "method": "extract",
+        "description": "All line items or product/service entries listed on the invoice. Typically found in a table format in the middle section. Extract EVERY row from the items table. Also disclosed as 'Items', 'Products', 'Services', or 'Order Details'.",
+        "items": {
+          "type": "object",
+          "description": "A single line item representing one product or service.",
+          "properties": {
+            "ItemDescription": {
+              "type": "string",
+              "method": "extract",
+              "description": "The description, name, or title of the product or service. May include model numbers, SKUs, or service details. Examples: 'Professional Services - Consulting', 'Widget Model XYZ', 'Monthly Subscription Fee'",
+              "estimateSourceAndConfidence": true
+            },
+            "Quantity": {
+              "type": "number",
+              "method": "extract",
+              "description": "The number of units ordered or quantity of service. May be labeled as 'Qty', 'Quantity', 'Units', or '#'. Examples: 1, 10, 2.5",
+              "estimateSourceAndConfidence": true
+            },
+            "UnitPrice": {
+              "type": "number",
+              "method": "extract",
+              "description": "The price per single unit before multiplication by quantity. May be labeled as 'Unit Price', 'Price Each', 'Rate', or 'Price/Unit'. Extract as number without currency symbols. Examples: 50.00, 125.99",
+              "estimateSourceAndConfidence": true
+            },
+            "LineTotal": {
+              "type": "number",
+              "method": "extract",
+              "description": "The total price for this line item (typically quantity × unit price). May be labeled as 'Amount', 'Total', 'Line Total', 'Ext Price', or 'Extended Price'. Extract as number without currency symbols. Examples: 100.00, 1259.90",
+              "estimateSourceAndConfidence": true
+            }
+          }
+        }
+      }
+    }
+  }
+}

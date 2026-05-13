@@ -1,0 +1,53 @@
+{
+  "description": "Invoice analyzer - Version 1.0 baseline",
+  "baseAnalyzerId": "prebuilt-invoice",
+  "fieldSchema": {
+    "fields": {
+      "VendorName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The name of the company or vendor that issued the invoice."
+      },
+      "VendorAddress": {
+        "type": "string",
+        "method": "extract",
+        "description": "Vendor mailing address."
+      },
+      "InvoiceNumber": {
+        "type": "string",
+        "method": "extract",
+        "description": "Invoice number or identifier."
+      },
+      "InvoiceDate": {
+        "type": "string",
+        "method": "extract",
+        "description": "Date the invoice was issued."
+      },
+      "TotalAmount": {
+        "type": "number",
+        "method": "extract",
+        "description": "Total amount due."
+      },
+      "Items": {
+        "type": "array",
+        "method": "extract",
+        "description": "Line items from the invoice.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "Description": {
+              "type": "string",
+              "method": "extract",
+              "description": "Item description"
+            },
+            "Amount": {
+              "type": "number",
+              "method": "extract",
+              "description": "Item amount"
+            }
+          }
+        }
+      }
+    }
+  }
+}

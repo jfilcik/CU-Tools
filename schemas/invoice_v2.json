@@ -1,0 +1,53 @@
+{
+  "description": "Invoice analyzer - Version 2.0 with improved descriptions",
+  "baseAnalyzerId": "prebuilt-invoice",
+  "fieldSchema": {
+    "fields": {
+      "VendorName": {
+        "type": "string",
+        "method": "extract",
+        "description": "The name of the company or vendor that issued the invoice. Usually positioned prominently at the top of the document in the header area, often in larger or bold text. Examples: 'Acme Corporation', 'ABC Services LLC', 'XYZ Industries Inc.'"
+      },
+      "VendorAddress": {
+        "type": "string",
+        "method": "extract",
+        "description": "The complete mailing address of the vendor/company that issued the invoice. Typically located below the vendor name in the header section. Should include street address, city, state, and zip code. Example: '123 Main St, Seattle, WA 98101'."
+      },
+      "InvoiceNumber": {
+        "type": "string",
+        "method": "extract",
+        "description": "The invoice number uniquely identifying this document. Usually located in the top-right area, near the date. May be labeled as 'Invoice #', 'Invoice No.', 'INV-', or similar. Format is typically alphanumeric (e.g., INV-2024-001, 12345)."
+      },
+      "InvoiceDate": {
+        "type": "string",
+        "method": "extract",
+        "description": "The date when the invoice was issued. Located in the top-right area near the invoice number. Common labels: 'Date', 'Invoice Date', 'Issue Date'. Format examples: '2024-01-15', '01/15/2024', 'January 15, 2024'. If multiple dates present (issued, due, paid), select the issuance date."
+      },
+      "TotalAmount": {
+        "type": "number",
+        "method": "extract",
+        "description": "The total amount due including tax and fees. Usually at the bottom right, labeled 'Total', 'Amount Due', or 'Balance'. Format as decimal (e.g., 1234.56). This is typically the largest monetary value on the invoice."
+      },
+      "Items": {
+        "type": "array",
+        "method": "extract",
+        "description": "Array of line items for products or services. Found in the main body of the invoice, typically in table format between the header and total section.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "Description": {
+              "type": "string",
+              "method": "extract",
+              "description": "Product or service description from the line item. Usually the first or second column in the items table."
+            },
+            "Amount": {
+              "type": "number",
+              "method": "extract",
+              "description": "Price or amount for this line item as a decimal number (e.g., 99.99). Usually in the rightmost column of the items table."
+            }
+          }
+        }
+      }
+    }
+  }
+}
