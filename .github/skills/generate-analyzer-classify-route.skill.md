@@ -358,6 +358,28 @@ Issues/{project}/
 
 ---
 
+## Edge Cases & Workarounds
+
+Consult this section only when you hit one of these situations. The workflow steps above cover the happy path.
+
+### High "other" classification rate
+**Cause**: Category descriptions lack distinguishing text anchors, or the packet contains an unrecognized document type.
+**Fix**: Inspect `.layout.md` for the mis-classified segments, add the unique headings/labels to the matching category `description`, and re-create the classifier as `_v2`.
+
+### Two similar types get confused
+**Cause**: Overlapping keywords across category descriptions.
+**Fix**: Add contrastive anchors — describe what is unique to each type *versus* the other ("contains 'Registration Card' but NOT 'Certificate of Title'").
+
+### Classifier references a stale analyzer ID
+**Cause**: An inner analyzer was re-created (new ID) but the classifier schema still points at the old ID.
+**Fix**: Re-capture the inner analyzer IDs, update the `analyzerId` values in the classifier schema, and re-create the classifier. Inner analyzers must always exist before the classifier (see Deployment Sequence).
+
+### Nesting depth / recursive routing limits
+**Cause**: Attempting to nest classifiers many levels deep, or applying document nesting rules to video.
+**Fix**: Review depth limits in `classify-and-route-schema.prompt.md`. Note video supports only **1 level** of classification (see `generate-analyzer-video.skill.md`).
+
+---
+
 ## Related Skill
 
 - `generate-analyzer.skill.md` — Standard single-type analyzer (start here if new to CU)

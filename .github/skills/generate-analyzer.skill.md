@@ -43,12 +43,8 @@ Critical rule: CU is two-stage. Describe text and structure, not visual styling.
 > `generate-analyzer-video.skill.md` skill instead. Video schemas require specific patterns
 > (string timestamps in `hh:mm:ss.ms`, keyframe anchoring) that differ from document schemas.
 
-> **⚠️ Video segmentation (GA API 2025-11-01)**:
-> The config options `enableSegmentation`, `segmentationMode`, and `segmentationDefinition` are
-> **NOT supported** in the GA API (2025-11-01). For video segmentation, use `contentCategories`
-> with `enableSegment: true` — the same classify-and-route pattern used for documents.
-> See `generate-analyzer-classify-route.skill.md` and `Agents.md` section 4.7 for details.
-> Example: Disney schemas at `Issues/Disney/schemas/v2/input_disney_segmentation.json`.
+> ⚠️ **Edge-case flag:** `enableSegmentation` and related config options are **not** supported in
+> GA API 2025-11-01. If you need video segmentation, see **Edge Cases & Workarounds** at the end of this skill.
 
 ### 4) Validate Schema Before Creation
 python tools/cu-analyzer-validate/cu_analyzer_validator.py {project_folder}/schemas/{name}_v1.json
@@ -85,6 +81,16 @@ Issues/{project}/
 - Analyzer test run completes successfully.
 - Key fields trend toward usable quality (target: >80% fill for critical fields).
 - Results exported for review and iteration decisions.
+
+## Edge Cases & Workarounds
+
+Consult this section only when the inline flags above apply. The happy path covers standard single-type document analyzers.
+
+### Video segmentation (GA API 2025-11-01)
+The config options `enableSegmentation`, `segmentationMode`, and `segmentationDefinition` are
+**NOT supported** in the GA API (2025-11-01). For video segmentation, use `contentCategories`
+with `enableSegment: true` — the same classify-and-route pattern used for documents.
+See `generate-analyzer-classify-route.skill.md` and `Agents.md` section 4.7 for details.
 
 ## Related Resources
 - Video analyzer with timestamps: generate-analyzer-video.skill.md

@@ -8,6 +8,14 @@ Hands-on tutorials for Azure Content Understanding — from raw API exploration 
 | [02-Invoice-Extraction](02-Invoice-Extraction/) | Build a document analyzer using the agent-based workflow | 15 min |
 | [03-Video-Analysis](03-Video-Analysis/) | Build a video analyzer with keyframe-anchored timestamps | 15 min |
 
+## Recipes
+
+Focused, self-contained fixes for specific problems:
+
+| Recipe | Problem it solves |
+|--------|-------------------|
+| [fillable-form-annot-ocr-fix](04-fillable-form-annot-ocr-fix/) | Fillable-form (`/Annot` widget) values getting OCR-misread — flatten them into the content stream so CU reads them as digital text |
+
 ## Prerequisites
 
 All tutorials require:

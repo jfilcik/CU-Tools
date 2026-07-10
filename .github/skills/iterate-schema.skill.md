@@ -73,6 +73,9 @@ For each flagged field, identify the root cause:
 | Low fill rate AND low confidence | Description doesn't match document content | Review layout output, rewrite description from scratch |
 | High variance | Inconsistent across doc types | Add more specific location context |
 | Value mismatch (wrong extractions) | Confusing with another field | Add "not to be confused with..." disambiguation |
+| **No `valueString` returned, but `confidence ≥ 0.7`** | **Reading-order broken: LLM knows the field exists but can't resolve which token is the value** | **See "Diagnosing Missing Values with High Confidence" below** |
+| Field works with `enableLayout: false` but fails with `enableLayout: true` | Layout model failed to detect a table; values and labels are positionally separated in OCR reading order | Flatten nested arrays, anchor by "directly below the label" in description, match exact document labels |
+| Only some summary/footer fields fail (e.g., totals row) | Summary footer rendered as free text, not `<table>` | Same as above — see "Diagnosing Missing Values with High Confidence" |
 
 ### Step 3: Review Layout Output
 
@@ -186,6 +189,44 @@ Then export and diagnose the full results to confirm improvements hold at scale.
    - Proximity to other fields: "below the invoice number"
    - Format constraints: "exactly 10 digits"
 4. Re-test stability to verify variance decreased
+
+### Pattern: Diagnosing Missing Values with High Confidence (Reading-Order Issues)
+
+**Signature**: Some fields extract reliably; others consistently return no `valueString` despite `confidence ≥ 0.7`. Re-running 10× yields the same misses — this is NOT stochastic LLM variance.
+
+**Likely cause**: The layout model failed to detect a region (commonly summary footers, multi-row headers, or sparse grids) as a `<table>`. Labels and values are emitted as free text, and OCR reading order separates them by many tokens. The LLM sees the label, knows a value should exist (hence the confidence), but cannot resolve which token is the value.
+
+**Real-world example (APL Logistics packing list)**:
+- `enableLayout: true` (default): `GrossWeight`, `CartonsQty`, `PiecesQty` consistently missing across 10 runs
+- `enableLayout: false`: Same fields extract correctly every time (prebuilt-document key-value pair detection uses spatial proximity)
+- Document Intelligence markdown output identical in both environments → not a service-side issue
+- Initial diagnosis: "DEV vs PROD discrepancy" — actually a schema/layout interaction
+
+**Diagnostic steps**:
+
+1. **Inspect the layout output for the failing region**:
+   ```bash
+   python tools/cu-analyzer-run/run.py --layout --input <doc.pdf> --output diag_layout/
+   ```
+   Open `diag_layout/<doc>.layout.md`. If the failing fields' labels and values appear as plain text (no `<table>` wrapping) and labels are visually above values, reading order is likely broken.
+
+2. **Compare with `--read` (no layout)**:
+   ```bash
+   python tools/cu-analyzer-run/run.py --read --input <doc.pdf> --output diag_read/
+   ```
+   Note the token order. If labels appear far before values in the read stream, the same will be true in the layout token stream that the LLM consumes.
+
+3. **Verify with a flattened test schema**: Create a minimal flat schema (no nested arrays) targeting only the failing fields with explicit "directly below the label" descriptions. If the flat schema works, the original nested schema's complexity was a contributing factor.
+
+**Mitigations** (in order of preference):
+
+1. **Flatten** — move summary/total fields out of nested `Goods[]` / `LineItems[]` arrays to top-level. Document-level totals don't belong in line-item arrays.
+2. **Anchor by position relative to the label** — `"The numeric value appearing directly below the 'Gross Kgs' label"`.
+3. **Match exact document labels** — if the document says "# of Cartons", don't write `"labeled 'Total Cartons'"`. Read the actual label from `.layout.md`.
+4. **Fix examples** — examples that look nothing like real values bias the LLM. If the real value is `180.82`, don't use `"2459044"` as an example.
+5. **Workaround**: `enableLayout: false` in analyzer config. Trades layout-table awareness for `prebuilt-document` key-value detection. Use when document-level rewrite isn't feasible.
+
+**Reference**: `Agents.md` §4.5 (two-stage pipeline) and `generate-analyzer-schema.prompt.md` §7 (reading-order pitfalls).
 
 ---
 

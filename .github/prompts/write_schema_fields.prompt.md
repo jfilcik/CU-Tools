@@ -57,6 +57,21 @@ Use the same language as your documents. For Italian invoices, use Italian field
 - ✅ "Near the label 'Total:', in the summary section at bottom"
 - ❌ "The number in bold red text at the top right"
 
+#### 6. Anchor Summary/Footer Fields by Relative Position
+For values in summary rows, totals footers, or any region where labels and values appear in separate rows, explicitly describe the spatial relationship — OCR reading order may separate labels from values when the layout model fails to detect a `<table>`.
+- ✅ "The numeric value appearing **directly below** the 'Gross Kgs' label in the summary footer"
+- ❌ "The total gross weight"
+
+#### 7. Match the Exact Label in the Document
+Always confirm the label text by inspecting `.layout.md` output first. Paraphrased labels reduce extraction reliability.
+- ✅ `"labeled '# of Cartons'"` (matches document)
+- ❌ `"labeled 'Total Cartons'"` (paraphrase — document actually says `# of Cartons`)
+
+#### 8. Use Realistic Examples
+Examples that look nothing like real values bias the LLM toward the wrong format.
+- ✅ `"examples": ["180.82", "133.52"]` when real values are 2-decimal weights
+- ❌ `"examples": ["2459044"]` when real values are small decimals
+
 **Good Example**:
 ```
 "description": "The date when the invoice was issued, typically found at the top right corner. May be labeled as 'Invoice Date', 'Billing Date', or 'Issue Date'. Format is usually MM/DD/YYYY or DD-MM-YYYY. Examples: '01/15/2024', '2024-01-15', 'January 15, 2024'."

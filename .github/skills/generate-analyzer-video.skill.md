@@ -19,6 +19,8 @@ python tools/cu-analyzer-run/create_and_test.py --schema {project_folder}/schema
 python tools/cu-results-export/export.py --input {project_folder}/test_results/v1 --output {project_folder}/test_results/v1/results.csv
 ```
 
+> ⚠️ **Edge-case flag:** Videos > 20 MB (or unknown/mixed size) must use a SAS blob URL upload, not binary upload. Read **Edge Cases & Workarounds → Large videos (> 20 MB)** at the end of this skill *before* processing large files.
+
 ## Video-Specific Concepts
 
 ### Two-Stage Pipeline for Video
@@ -55,7 +57,7 @@ Checklist:
 - Collect 3-5 video files covering different content types and lengths
 - Start with short videos (<2 min) for initial schema development
 - Confirm environment variables: AZURE_AI_ENDPOINT, AZURE_AI_API_KEY
-- For videos >20MB, use URL-based analysis via Azure Blob Storage (see Large Video section)
+- ⚠️ For any video > 20 MB (or unknown/mixed size): use SAS blob URL upload, not binary. See **Edge Cases & Workarounds → Large videos (> 20 MB)** at the end of this skill.
 
 ### 2) Design Schema — Timestamp Fields
 
@@ -190,22 +192,9 @@ With the recommended V1c pattern (string timestamps in `hh:mm:ss.ms`):
 > **Note**: Object count naturally decreases on very long videos (24 objects on 58-min vs 57 on 15-min).
 > The LLM has limited context for very long keyframe lists, but all generated timestamps are accurate.
 
-#### Large Video Upload (>20MB)
+#### Large videos (> 20 MB)
 
-For videos larger than ~20MB, use URL-based analysis to avoid upload timeouts:
-
-```python
-# Upload to Azure Blob Storage first, then analyze via URL
-from content_understanding_client import AzureContentUnderstandingClient
-
-client = AzureContentUnderstandingClient(endpoint, api_version="2025-11-01", subscription_key=key)
-resp = client.begin_analyze_url(analyzer_id, blob_url_with_sas)
-result = client.poll_result(resp, timeout_seconds=2400)
-```
-
-- Local binary upload: practical limit ~20MB (connection resets on larger files)
-- URL-based: tested successfully on videos up to 446MB / 58 minutes
-- Set timeout proportional to video length: ~30-40x the video duration in seconds
+⚠️ Videos over ~20 MB must use SAS blob URL upload, not binary — see **Edge Cases & Workarounds → Large videos (> 20 MB)** at the end of this skill for the full pattern, batch approach, and verified bounds.
 
 ### 6) Post-Processing Recommendations
 
@@ -263,7 +252,51 @@ Issues/{project}/
 - Long videos (>5 min): 100% keyframe match, 0% exceeds (object count may be lower)
 - Results exported and validated visually
 
-## Common Issues
+## Edge Cases & Workarounds
+
+Consult this section only when you hit one of these situations. The happy path above covers standard videos; each entry below is referenced from an inline flag earlier in the skill.
+
+### Large videos (> 20 MB)
+
+**Any video file larger than ~20 MB MUST be analyzed via a SAS-signed Azure Blob URL — not by binary upload.** The REST binary upload path (`begin_analyze_binary`) silently fails or returns connection-reset errors above this practical limit. This is the single most common source of "the analyzer hangs / times out / 500s on my big video" support tickets.
+
+**Decision rule (apply BEFORE writing any code):**
+
+| Video file size | Required upload method | Client call |
+|---|---|---|
+| ≤ 20 MB | Local binary upload OR blob URL | `begin_analyze_binary(path)` |
+| > 20 MB | **Blob URL ONLY** | `begin_analyze_url(sas_url)` |
+| Unknown / mixed batch | **Blob URL (always safe)** | `begin_analyze_url(sas_url)` |
+
+When in doubt, always upload to Azure Blob Storage and analyze by URL — it works for every size, removes the upload as a failure mode, and the per-call cost is identical.
+
+**Standard pattern for large videos:**
+
+```python
+# 1. Upload to Azure Blob Storage (one time, or scripted batch).
+#    Container access tier can be Hot or Cool; CU only needs read access.
+# 2. Generate a short-lived read-only SAS URL for the blob (or container).
+#    Minimum SAS rights: read (r). Container SAS is convenient for batches.
+# 3. Submit the SAS URL to CU.
+from content_understanding_client import AzureContentUnderstandingClient
+client = AzureContentUnderstandingClient(endpoint, api_version="2025-11-01", subscription_key=key)
+resp = client.begin_analyze_url(analyzer_id, blob_url_with_sas)
+result = client.poll_result(resp, timeout_seconds=2400)
+```
+
+**Container-SAS batch pattern** (analyze every video under a prefix in one container):
+
+```python
+# List blobs under prefix via the container SAS, then call begin_analyze_url per blob.
+# Reference implementation: Issues/WaPo/analyze_videos.py
+#   --container-sas "https://<acct>.blob.core.windows.net/<container>?<sas>"
+#   --prefix "Test Videos/"
+```
+
+**Verified bounds:**
+- URL-based: tested successfully on videos up to **446 MB / 58 minutes**.
+- Set `timeout_seconds` to roughly **30–40× the video duration in seconds** (e.g., a 10-minute video → 18,000–24,000 s).
+- Local binary upload: practical limit ~20 MB (connection resets on larger files).
 
 ### Timestamps exceed video duration
 **Cause**: LLM hallucinates timestamps beyond the video length.
@@ -279,7 +312,7 @@ Issues/{project}/
 
 ### Timeout on large videos
 **Cause**: Large file upload or long processing time.
-**Fix**: Use URL-based analysis (`begin_analyze_url`) for videos >20MB. Set timeout to 30-40x video duration.
+**Fix**: Use URL-based analysis (`begin_analyze_url`) — see "Large videos (> 20 MB)" above. Set timeout to 30–40× video duration.
 
 ### `enableSegmentation` not supported
 **Cause**: This config option is preview-only, not in GA API 2025-11-01.

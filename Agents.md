@@ -41,6 +41,8 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
   - `content_understanding_client.py` - Base CU API client (shared by all tools)
 
 **Supporting Tools**:
+- `tools/cu-reading-order-viz/`
+  - `visualize_reading_order.py` - Overlays numbered bounding boxes and directional arrows onto PDF pages to visualize the reading order produced by CU Layout extraction. Use to diagnose mis-ordered paragraphs or layout quality issues. Supports single documents, batch folders, side-by-side comparison of two layout sources (e.g. prod vs selfhost), and per-page filtering. Auto-detects CU (`result.contents[].paragraphs`) and Document Intelligence (`analyzeResult.paragraphs`) JSON formats.
 - `tools/review_file/`
   - `review_file.py` - Automated document review and extraction
 - `tools/test_notebooks/`
@@ -67,7 +69,7 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
   - `evaluate-analyzer.prompt.md` - Core eval workflow (scale/stability)
   - `evaluate-analyzer-video.prompt.md` - Video-specific eval (timestamps, keyframes)
   - `classify-and-route-schema.prompt.md` - Classifier schema design and nesting rules
-- `.github/skills/` - Complete workflow guides (4 files)
+- `.github/skills/` - Complete workflow guides (5 files)
   - `generate-analyzer.skill.md` - Analyzer creation workflow (standard, single document type)
   - `generate-analyzer-video.skill.md` - Video analyzer with keyframe-anchored timestamps
   - `generate-analyzer-classify-route.skill.md` - Classifier + multi-type routing (advanced pattern)
@@ -710,10 +712,11 @@ python tools/cu-results-export/export.py --input results/ --output results.csv
 - **Create & Test**: `tools/cu-analyzer-run/create_and_test.py`
 - **Validator**: `tools/cu-analyzer-validate/cu_analyzer_validator.py`
 - **Exporter**: `tools/cu-results-export/export.py`
+- **Reading Order Visualizer**: `tools/cu-reading-order-viz/visualize_reading_order.py`
 - **Examples**: `Issues/_TEMPLATE/`, `Issues/WK_Runs/WK/`, `Issues/Crowne/`, `Issues/Carvana/`
 - **Prompts**: `.github/prompts/*.prompt.md`
 - **Skills**: `.github/skills/*.skill.md`
 
 ---
 
-**End of Agents.md** (v1.1 - 2026-04-07)
+**End of Agents.md** (v1.2 - 2026-07-10)

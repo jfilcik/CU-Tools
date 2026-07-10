@@ -246,6 +246,49 @@ Define field names and descriptions in the same language as your documents. Lang
 }
 ```
 
+### 7. Reading-Order Pitfalls in Summary Footers and Multi-Row Headers
+
+The layout model does not always recognize summary footers (e.g., totals rows below a table) or multi-row header layouts as tables. When labels are in one row and values in another, but the layout model emits them as **free text** rather than a `<table>`, the OCR reading order can place labels far away from their values in the text stream.
+
+**Symptom**: A field returns no `valueString` but has `confidence ≥ 0.7` — the LLM knows a value should exist but cannot resolve which token to extract from the garbled reading order.
+
+**Example pattern (from real APL Logistics document)**:
+```
+Visual layout (what a human sees):
+| Gross Kgs | Net Kgs | CBM  | # of Cartons | # of Units |
+| 180.82    | 133.52  | 2.04 | 86           | 1,002      |
+
+OCR reading order (what the LLM sees as text):
+  Gross Kgs                  ← all labels read first
+  Net Kgs
+  CBM
+  2.04                       ← CBM value adjacent → extracts correctly
+  # of Cartons
+  # of Units
+  Total by Size:  110  156  271  278  187   ← interleaved size totals
+  180.82  133.52  86  1,002  ← all values read last, far from labels
+```
+
+**Mitigations** (apply all that are relevant):
+
+1. **Anchor by name + relative position in the description**, not by table column:
+   ```
+   ✅ "Found in the summary section at the bottom of the carton table,
+       labeled 'Gross Kgs'. The numeric value appears directly below
+       the 'Gross Kgs' label. Format: decimal number. Example: '180.82'"
+   ```
+   Telling the LLM the value is "directly below the label" helps it resolve vertical column alignment even when reading order is broken.
+
+2. **Match the exact label in the document**, not a paraphrase:
+   - ❌ "labeled 'Total Gross'" when the document says "Gross Kgs"
+   - ❌ "labeled 'Total Cartons'" when the document says "# of Cartons"
+
+3. **Flatten summary-row fields out of nested arrays.** Fields like `GrossWeight`, `CartonsQty`, `PiecesQty` are document-level totals, not line-item properties. Placing them inside `Goods[].properties` adds parsing complexity and dilutes the LLM's attention across many fields per array item.
+
+4. **Diagnostic**: Run `tools/cu-analyzer-run/run.py --layout` and inspect `.layout.md`. If a summary row appears as plain text (not inside `<table>`) and the values are visually separated from their labels by other content, expect reading-order issues. As a confirmation, run `--read` (no layout) and check whether the labels and values are still positionally close — if they aren't, the document layout is the culprit.
+
+5. **Last resort**: Set `enableLayout: false` in the analyzer config. This trades layout-table awareness for the `prebuilt-document` key-value pair detector, which uses spatial proximity instead of text reading order. Document this as a workaround for the specific document type.
+
 ## Use Structured Types for Repeated Data
 
 Define repeated items (like line items or entries) as **arrays of objects** rather than string fields requesting JSON output.

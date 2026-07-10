@@ -108,9 +108,16 @@ def snap_to_keyframe(ts_ms, keyframe_times_ms, duration_ms):
 
 ### Large Video Considerations
 
-- Local upload limit: ~20MB (use URL-based analysis for larger files)
+- **Videos > 20 MB MUST use URL-based analysis via Azure Blob Storage SAS** — the local
+  binary upload path silently fails / times out above this size. Never attempt
+  `begin_analyze_binary` for files larger than ~20 MB; upload to blob and call
+  `begin_analyze_url(sas_url)` instead. When in doubt (e.g. mixed-size batch), always
+  default to blob URL — it works for any size and the per-call cost is identical.
 - Set timeout proportional to video length: ~30-40× video duration in seconds
-- CU API hard limit: 200MB file size
+- CU API hard limit: 200MB file size (URL-based; verified to 446 MB in practice for
+  some deployments — confirm for your region)
+- See "Critical Rule: Videos > 20 MB Must Use Blob URL Upload" in
+  `.github/skills/generate-analyzer-video.skill.md` for the canonical pattern
 
 ## See Also
 
