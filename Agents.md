@@ -69,11 +69,12 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
   - `evaluate-analyzer.prompt.md` - Core eval workflow (scale/stability)
   - `evaluate-analyzer-video.prompt.md` - Video-specific eval (timestamps, keyframes)
   - `classify-and-route-schema.prompt.md` - Classifier schema design and nesting rules
-- `.github/skills/` - Complete workflow guides (5 files)
+- `.github/skills/` - Complete workflow guides
   - `generate-analyzer.skill.md` - Analyzer creation workflow (standard, single document type)
   - `generate-analyzer-video.skill.md` - Video analyzer with keyframe-anchored timestamps
   - `generate-analyzer-classify-route.skill.md` - Classifier + multi-type routing (advanced pattern)
   - `eval-cu.skill.md` - Evaluation workflow
+  - `cu-preview-api.skill.md` - Preview API and agentic compatibility workflow
 
 ### Examples
 
@@ -85,6 +86,9 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
 - `Issues/Carvana/` - Vehicle title/registration classify-and-route pattern
 - `Issues/LeftTurn/` - Legal document extraction
 - Other project-specific examples
+
+**Reusable Examples** (`examples/`):
+- `05-Agentic-Contract-Obligations/` - Preview agentic contract extraction with exact-quote evidence, CUAD preparation, and EvalLens evaluation
 
 **Learning Resources** (AzureSamples/):
 - `AzureSamples/notebooks/` - Jupyter tutorial notebooks
@@ -466,6 +470,30 @@ Document Packet (multi-page PDF or batch of images)
 - Use appropriate base analyzers (prebuilt-layout vs prebuilt-document)
 - Minimize redundant analyses (cache results where possible)
 - Consider field complexity vs extraction value
+
+### 4.10 Preview Agentic API
+
+The following contract was live-verified on the Southeast Asia test resource:
+
+- API version: `2026-06-01-preview`
+- Completion model: `gpt-5.2`
+- Agentic selector: `config.workflow: "Agentic"`
+- Input cardinality: one file per analysis request
+
+The tools retain `2025-11-01` as the GA default. Preview schemas must pass
+`--api-version 2026-06-01-preview` explicitly to the validator,
+`create_and_test.py`, and `run.py`. The validator rejects `config.workflow`
+without that explicit preview contract and accepts only the case-sensitive value
+`Agentic`.
+
+Use a short, non-sensitive create/analyze/delete smoke cycle before running a
+corpus. Agentic mode has materially higher latency and token use: a short
+contract can take more than a minute, while a long CUAD contract can exceed a
+ten-minute timeout. A timeout does not mean analyzer creation or the schema
+contract was rejected. Gate paid scale and stability runs behind explicit cost
+confirmation.
+
+Use `.github/skills/cu-preview-api.skill.md` for the test-resource workflow.
 
 ---
 

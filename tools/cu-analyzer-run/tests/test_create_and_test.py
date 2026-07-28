@@ -109,6 +109,12 @@ class TestSchemaValidation:
             
             assert schema["fieldSchema"]["fields"]["TestField"]["method"] == method
 
+    def test_preview_version_can_be_resolved_from_environment(self, monkeypatch):
+        monkeypatch.setenv("CU_API_VERSION", "2026-06-01-preview")
+        from run import resolve_api_version
+
+        assert resolve_api_version(None) == "2026-06-01-preview"
+
     def test_loads_real_schema_files(self):
         """Test loading real schema files from schemas folder."""
         if not SCHEMAS_FOLDER.exists():

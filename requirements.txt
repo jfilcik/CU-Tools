@@ -14,3 +14,6 @@ azure-storage-blob>=12.14.0
 
 # Example document generation
 reportlab>=4.0.0
+
+# Local PDF grounding viewer
+PyMuPDF>=1.24.0

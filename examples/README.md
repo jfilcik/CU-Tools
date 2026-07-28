@@ -7,6 +7,7 @@ Hands-on tutorials for Azure Content Understanding — from raw API exploration 
 | [01-API-Testing](01-API-Testing/) | Explore the CU REST API with HTTP test files in VS Code | 10 min |
 | [02-Invoice-Extraction](02-Invoice-Extraction/) | Build a document analyzer using the agent-based workflow | 15 min |
 | [03-Video-Analysis](03-Video-Analysis/) | Build a video analyzer with keyframe-anchored timestamps | 15 min |
+| [05-Agentic-Contract-Obligations](05-Agentic-Contract-Obligations/) | Extract quote-grounded atomic obligations with the agentic preview API and evaluate against CUAD | 30+ min |
 
 ## Recipes
 

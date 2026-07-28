@@ -1,0 +1,188 @@
+{
+  "description": "Extract contract metadata, parties, and atomic obligations with exact supporting quotations. Do not infer operational status, playbook deviations, or general risk scores.",
+  "baseAnalyzerId": "prebuilt-document",
+  "models": {
+    "completion": "gpt-5.2"
+  },
+  "config": {
+    "workflow": "Agentic",
+    "returnDetails": true,
+    "estimateFieldSourceAndConfidence": true
+  },
+  "fieldSchema": {
+    "fields": {
+      "ContractMetadata": {
+        "type": "object",
+        "method": "generate",
+        "description": "Generate only contract-level facts explicitly supported by the contract. Leave unsupported values empty rather than estimating them.",
+        "properties": {
+          "ContractTitle": {
+            "type": "string",
+            "method": "generate",
+            "description": "The contract title copied from the agreement heading or introductory text. Return an empty string when no title is stated."
+          },
+          "ContractType": {
+            "type": "string",
+            "method": "generate",
+            "description": "A concise contract type grounded in the title and operative text, such as Distribution Agreement or License Agreement. Do not infer a type from external knowledge."
+          },
+          "EffectiveDate": {
+            "type": "string",
+            "method": "generate",
+            "description": "The expressly stated effective date, preserving the document's wording. Return an empty string if the effective date cannot be established."
+          },
+          "ExpirationDate": {
+            "type": "string",
+            "method": "generate",
+            "description": "The expressly stated expiration or end date. Preserve the source wording and return an empty string when only a duration or renewal rule is stated."
+          },
+          "GoverningLaw": {
+            "type": "string",
+            "method": "generate",
+            "description": "The jurisdiction whose law expressly governs the contract, copied from the governing-law clause. Return an empty string when absent."
+          }
+        }
+      },
+      "Parties": {
+        "type": "array",
+        "method": "generate",
+        "description": "List only legal persons or entities identified as parties to the agreement. Assign stable IDs P1, P2, and so on in order of first appearance. Do not create parties for regulators, affiliates, customers, or third parties unless the contract identifies them as contracting parties.",
+        "items": {
+          "type": "object",
+          "description": "One contracting party supported by the agreement text.",
+          "properties": {
+            "PartyId": {
+              "type": "string",
+              "method": "generate",
+              "description": "Stable identifier in the form P1, P2, and so on, assigned in order of first appearance."
+            },
+            "LegalName": {
+              "type": "string",
+              "method": "generate",
+              "description": "The party's full legal name as written in the introductory paragraph or signature block."
+            },
+            "Aliases": {
+              "type": "array",
+              "method": "generate",
+              "description": "Defined names and textual aliases that refer to this party, excluding pronouns. Return an empty array when none are stated.",
+              "items": {
+                "type": "string",
+                "description": "A verbatim defined name or alias used for the party."
+              }
+            },
+            "ContractRole": {
+              "type": "string",
+              "method": "generate",
+              "description": "The party role expressly assigned by the contract, such as Licensor, Distributor, Buyer, or Seller. Return Party when no role label is stated."
+            }
+          }
+        }
+      },
+      "Obligations": {
+        "type": "array",
+        "method": "generate",
+        "description": "Produce atomic contractual duties, prohibitions, conditional duties, and surviving duties. Split compound clauses when different actions, obligors, triggers, timing, or exceptions apply. Use only PartyIds from Parties for obligors and obligees. Preserve conditions, timing, amounts, and exceptions. Deduplicate repeated or cross-referenced statements. Return an empty array rather than speculate. Every obligation must contain at least one exact, contiguous, character-for-character quote that directly supports the duty or prohibition; never paraphrase, concatenate separate spans, or insert ellipses.",
+        "items": {
+          "type": "object",
+          "description": "One atomic and text-grounded contractual obligation.",
+          "properties": {
+            "ObligationId": {
+              "type": "string",
+              "method": "generate",
+              "description": "Stable identifier in the form O1, O2, and so on, assigned in contract order."
+            },
+            "ObligorPartyId": {
+              "type": "string",
+              "method": "generate",
+              "description": "PartyId of the party that must perform or refrain from the action. Return an empty string when no contracting party can be established."
+            },
+            "ObligeePartyIds": {
+              "type": "array",
+              "method": "generate",
+              "description": "PartyIds of contracting parties that receive the benefit of the obligation. Return an empty array when the beneficiary is not a contracting party or cannot be established.",
+              "items": {
+                "type": "string",
+                "description": "A PartyId from the Parties array."
+              }
+            },
+            "ObligationType": {
+              "type": "string",
+              "method": "generate",
+              "description": "Classify as exactly one of: Payment; Delivery; Service/Performance; Reporting/Records; Confidentiality/Data Protection; Compliance; Insurance; Indemnification/Defense; Notice; Audit/Access; Intellectual Property/License; Restrictive Covenant; Warranty/Remedy; Termination/Post-Termination; Other."
+            },
+            "Nature": {
+              "type": "string",
+              "method": "generate",
+              "description": "Classify as exactly one of: Affirmative; Prohibition; Conditional; Survival."
+            },
+            "BusinessSummary": {
+              "type": "string",
+              "method": "generate",
+              "description": "A concise plain-language statement of who must do or avoid what, including material trigger or timing. Do not add duties absent from the quoted text."
+            },
+            "Evidence": {
+              "type": "array",
+              "method": "generate",
+              "description": "One or more evidence records. At least one ExactQuote must directly support the duty or prohibition. Add separate quotes when parties, trigger, timing, amount, or exception are established elsewhere. Quotes must be exact contiguous document text, not paraphrases, stitched spans, or text containing invented ellipses.",
+              "items": {
+                "type": "object",
+                "description": "One exact textual evidence span for the obligation.",
+                "properties": {
+                  "ExactQuote": {
+                    "type": "string",
+                    "method": "generate",
+                    "description": "A non-empty, contiguous, character-for-character quote copied from the document. Do not normalize, paraphrase, concatenate spans, or add ellipses."
+                  },
+                  "SourceReference": {
+                    "type": "string",
+                    "method": "generate",
+                    "description": "A human-readable section, clause, or page reference stated or visible in the extracted content. Native CU source and bounding-region details remain authoritative."
+                  },
+                  "EvidencePurpose": {
+                    "type": "string",
+                    "method": "generate",
+                    "description": "Classify as exactly one of: Duty; Parties; Trigger; Timing; Amount; Exception."
+                  }
+                }
+              }
+            },
+            "TriggerCondition": {
+              "type": "string",
+              "method": "generate",
+              "description": "The event or condition that activates the duty, preserving material qualifiers. Return an empty string for unconditional duties."
+            },
+            "Timing": {
+              "type": "string",
+              "method": "generate",
+              "description": "The deadline, frequency, duration, or timing rule stated for performance. Return an empty string when none is stated."
+            },
+            "AmountOrQuantity": {
+              "type": "string",
+              "method": "generate",
+              "description": "The stated monetary amount, formula, percentage, volume, or quantity applicable to this obligation. Return an empty string when none is stated."
+            },
+            "Exceptions": {
+              "type": "string",
+              "method": "generate",
+              "description": "Express carve-outs, exceptions, or limitations that qualify this obligation. Return an empty string when none is stated."
+            },
+            "IsPostTermination": {
+              "type": "boolean",
+              "method": "generate",
+              "description": "True only when the duty applies after expiration or termination; otherwise false."
+            },
+            "RelatedObligationIds": {
+              "type": "array",
+              "method": "generate",
+              "description": "IDs of other extracted obligations explicitly linked by prerequisites, alternatives, remedies, or survival language. Return an empty array when there is no explicit relationship.",
+              "items": {
+                "type": "string",
+                "description": "An ObligationId from this Obligations array."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

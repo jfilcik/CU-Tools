@@ -117,6 +117,7 @@ Step-by-step examples using public sample data:
 | **[01-API-Testing](Examples/01-API-Testing/)** | Explore CU REST APIs with HTTP test files in VS Code |
 | **[02-Invoice-Extraction](Examples/02-Invoice-Extraction/)** | Build a document analyzer using the agent-based workflow |
 | **[03-Video-Analysis](Examples/03-Video-Analysis/)** | Build a video analyzer with keyframe-anchored timestamps |
+| **[05-Agentic-Contract-Obligations](examples/05-Agentic-Contract-Obligations/)** | Build and evaluate a quote-grounded agentic contract analyzer with the preview API |
 
 Start with Tutorial 01 to explore the API, then follow 02 or 03 for the full agent-based workflow.
 

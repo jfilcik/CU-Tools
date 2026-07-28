@@ -1,0 +1,9 @@
+{
+  "dataset": "Contract Understanding Atticus Dataset (CUAD) v1",
+  "repository": "https://huggingface.co/datasets/theatticusproject/cuad",
+  "revision": "a3c393f5d103fd0c516374e4fdff676c8176dcb1",
+  "pdf_root": "CUAD_v1/full_contract_pdf",
+  "expected_pdf_count": 510,
+  "license": "cc-by-4.0",
+  "selection_manifest": "selection_manifest.json"
+}

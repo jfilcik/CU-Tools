@@ -111,6 +111,7 @@ except ImportError:
 # Import existing run.py functions
 from run import (
     get_client,
+    resolve_api_version,
     get_supported_files,
     check_files_for_protection,
     run_analysis,
@@ -119,7 +120,11 @@ from run import (
 )
 
 
-def validate_schema(schema_path: Path, strict: bool = False) -> bool:
+def validate_schema(
+    schema_path: Path,
+    strict: bool = False,
+    api_version: Optional[str] = None,
+) -> bool:
     """
     Validate analyzer schema using cu-analyzer-validate.
     
@@ -139,7 +144,7 @@ def validate_schema(schema_path: Path, strict: bool = False) -> bool:
     print(f"Validating schema: {schema_path.name}")
     print(f"{'='*60}")
     
-    result = validate_cu_analyzer_file(str(schema_path))
+    result = validate_cu_analyzer_file(str(schema_path), api_version=api_version)
     
     # Print summary
     print(f"\n{result.get_summary()}\n")
@@ -824,7 +829,10 @@ def main():
     parser.add_argument(
         "--api-version",
         type=str,
-        help="CU API version (default: from env or 2025-11-01)"
+        help=(
+            "CU API version (default: CU_API_VERSION or 2025-11-01). "
+            "Use 2026-06-01-preview for agentic preview analyzers."
+        )
     )
     parser.add_argument(
         "--max-workers",
@@ -862,6 +870,8 @@ def main():
     )
     
     args = parser.parse_args()
+    load_dotenv()
+    args.api_version = resolve_api_version(args.api_version)
     
     # Validate mutually exclusive args
     if args.schema_dir and args.inner_schema:
@@ -935,7 +945,7 @@ def main():
         print(f"{'='*60}")
         for aid in schema_dir_order:
             p = schema_dir_paths[aid]
-            if not validate_schema(p, strict=False):
+            if not validate_schema(p, strict=False, api_version=args.api_version):
                 print(f"\n❌ Schema validation failed for '{aid}': {p}")
                 sys.exit(1)
         
@@ -959,7 +969,7 @@ def main():
         print(f"\n{'='*60}")
         print(f"Step 1: Validate Schema")
         print(f"{'='*60}")
-        if not validate_schema(schema_path, strict=False):
+        if not validate_schema(schema_path, strict=False, api_version=args.api_version):
             print("\n❌ Schema validation failed. Please fix errors and try again.")
             sys.exit(1)
         
@@ -1003,7 +1013,7 @@ def main():
                 print(f"Validating Inner Schemas")
                 print(f"{'='*60}")
                 for alias, inner_path in inner_schemas.items():
-                    if not validate_schema(inner_path, strict=False):
+                    if not validate_schema(inner_path, strict=False, api_version=args.api_version):
                         print(f"\n❌ Inner schema validation failed for '{alias}': {inner_path}")
                         sys.exit(1)
             
@@ -1156,7 +1166,8 @@ def main():
             input_path=str(input_path),
             documents=[f.name for f in files],
             iterations=args.iterations,
-            test_type=test_type
+            test_type=test_type,
+            api_version=args.api_version,
         )
         metadata["schema_file"] = str(schema_path)
         metadata["analyzer_created"] = True

@@ -16,7 +16,35 @@ import json
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from run import get_supported_files, extract_markdown_from_layout
+from run import (
+    DEFAULT_API_VERSION,
+    create_run_metadata,
+    extract_markdown_from_layout,
+    get_supported_files,
+    resolve_api_version,
+)
+
+
+class TestApiVersion:
+    def test_explicit_preview_version_wins(self, monkeypatch):
+        monkeypatch.setenv("CU_API_VERSION", DEFAULT_API_VERSION)
+        assert resolve_api_version("2026-06-01-preview") == "2026-06-01-preview"
+
+    def test_ga_default_is_unchanged(self, monkeypatch):
+        monkeypatch.delenv("CU_API_VERSION", raising=False)
+        assert resolve_api_version() == DEFAULT_API_VERSION
+
+    def test_metadata_records_api_version(self):
+        metadata = create_run_metadata(
+            "run-1",
+            "analyzer-1",
+            "samples",
+            ["contract.txt"],
+            1,
+            "single",
+            api_version="2026-06-01-preview",
+        )
+        assert metadata["api_version"] == "2026-06-01-preview"
 
 
 # Test data paths
@@ -66,8 +94,8 @@ class TestGetSupportedFiles:
         
         files = get_supported_files(tmp_path)
         
-        assert len(files) == 1
-        assert files[0].name == "doc.pdf"
+        assert len(files) == 2
+        assert {file.name for file in files} == {"doc.pdf", "text.txt"}
 
     def test_case_insensitive_extensions(self, tmp_path):
         """Test that file extensions are matched case-insensitively.

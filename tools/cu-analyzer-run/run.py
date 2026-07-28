@@ -178,14 +178,25 @@ def check_files_for_protection(files: List[Path], verbose: bool = False) -> Tupl
     return valid_files, protected_files
 
 
+DEFAULT_API_VERSION = "2025-11-01"
+AGENTIC_PREVIEW_API_VERSION = "2026-06-01-preview"
+
+
+def resolve_api_version(api_version: Optional[str] = None) -> str:
+    """Resolve an explicit API version without changing the GA default."""
+    resolved = api_version or os.getenv("CU_API_VERSION") or DEFAULT_API_VERSION
+    if not isinstance(resolved, str) or not resolved.strip():
+        raise ValueError("CU API version must be a non-empty string")
+    return resolved.strip()
+
+
 def get_client(api_version: str = None) -> AzureContentUnderstandingClient:
     """Create CU client from environment variables."""
     load_dotenv()
     
     endpoint = os.getenv("AZURE_AI_ENDPOINT")
     api_key = os.getenv("AZURE_AI_API_KEY")
-    # Use provided api_version, then env var, then default to GA version
-    api_version = api_version or os.getenv("CU_API_VERSION", "2025-11-01")
+    api_version = resolve_api_version(api_version)
     
     if not endpoint:
         raise ValueError("AZURE_AI_ENDPOINT environment variable not set")
@@ -440,7 +451,8 @@ def create_run_metadata(
     input_path: str,
     documents: List[str],
     iterations: int,
-    test_type: str
+    test_type: str,
+    api_version: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create metadata file for the run."""
     return {
@@ -452,7 +464,8 @@ def create_run_metadata(
         "test_type": test_type,  # "single", "batch", "stability", "layout"
         "started_at": datetime.utcnow().isoformat() + "Z",
         "document_count": len(documents),
-        "total_runs": len(documents) * iterations
+        "total_runs": len(documents) * iterations,
+        "api_version": resolve_api_version(api_version),
     }
 
 
@@ -558,7 +571,13 @@ Examples:
     
     # Run identification
     parser.add_argument("--run-id", help="Custom run ID (auto-generated if not specified)")
-    parser.add_argument("--api-version", help="CU API version (default: from env or 2025-11-01)")
+    parser.add_argument(
+        "--api-version",
+        help=(
+            f"CU API version (default: CU_API_VERSION or {DEFAULT_API_VERSION}). "
+            f"Use {AGENTIC_PREVIEW_API_VERSION} for agentic preview analyzers."
+        ),
+    )
     parser.add_argument("--max-workers", type=int, default=1,
                         help="Number of parallel workers for processing documents (default: 1, recommended: 3-5)")
     
@@ -689,7 +708,8 @@ Examples:
         input_path=str(input_path),
         documents=[f.name for f in files],
         iterations=args.iterations,
-        test_type=test_type
+        test_type=test_type,
+        api_version=args.api_version,
     )
     
     # Add protected files info to metadata
