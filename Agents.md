@@ -35,6 +35,9 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
   - `cu_analyzer_validator.py` - Validate schema before creating analyzer (auto-runs in create_and_test.py)
 - `tools/cu-results-export/`
   - `export.py` - Export JSON results to CSV/Excel for analysis
+- `tools/cu-cost-estimator/`
+  - `cu_cost_estimator.py` - Estimate CU costs from schemas or actual API usage
+  - `generate_cost_summary.py` - Aggregate token usage and cost across result files
 
 **Client Library**:
 - `tools/cu-client/`
@@ -43,10 +46,6 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
 **Supporting Tools**:
 - `tools/cu-reading-order-viz/`
   - `visualize_reading_order.py` - Overlays numbered bounding boxes and directional arrows onto PDF pages to visualize the reading order produced by CU Layout extraction. Use to diagnose mis-ordered paragraphs or layout quality issues. Supports single documents, batch folders, side-by-side comparison of two layout sources (e.g. prod vs selfhost), and per-page filtering. Auto-detects CU (`result.contents[].paragraphs`) and Document Intelligence (`analyzeResult.paragraphs`) JSON formats.
-- `tools/review_file/`
-  - `review_file.py` - Automated document review and extraction
-- `tools/test_notebooks/`
-  - `test_notebooks.py` - Jupyter notebook testing
 
 ### Documentation
 
@@ -78,21 +77,8 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
 
 ### Examples
 
-**Project Examples** (Issues/):
-- `Issues/_TEMPLATE/` - Template for new analyzer projects
-- `Issues/WK_Runs/WK/` - K-1 tax form extraction (complex nested fields)
-- `Issues/Crowne/` - Purchase order extraction (line items)
-- `Issues/LuciHub/` - Video object detection with timestamps (keyframe anchoring investigation)
-- `Issues/Carvana/` - Vehicle title/registration classify-and-route pattern
-- `Issues/LeftTurn/` - Legal document extraction
-- Other project-specific examples
-
 **Reusable Examples** (`examples/`):
 - `05-Agentic-Contract-Obligations/` - Preview agentic contract extraction with exact-quote evidence, CUAD preparation, and EvalLens evaluation
-
-**Learning Resources** (AzureSamples/):
-- `AzureSamples/notebooks/` - Jupyter tutorial notebooks
-- `AzureSamples/analyzer_templates/` - Example analyzer schemas
 
 ### Configuration
 

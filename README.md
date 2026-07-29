@@ -91,6 +91,11 @@ python tools/cu-analyzer-run/create_and_test.py \
 
 # Export results to CSV
 python tools/cu-results-export/export.py --input test_results/ --output results.csv
+
+# Estimate cost from actual CU usage
+python tools/cu-cost-estimator/cu_cost_estimator.py estimate-usage \
+  --cu-output test_results/sample.json \
+  --model gpt-4.1-mini
 ```
 
 ---
@@ -131,6 +136,7 @@ Start with Tutorial 01 to explore the API, then follow 02 or 03 for the full age
 | **create_and_test** | Create + validate + test (all-in-one) | `python tools/cu-analyzer-run/create_and_test.py` |
 | **cu-analyzer-validate** | Check schema before creating | `python tools/cu-analyzer-validate/cu_analyzer_validator.py` |
 | **cu-results-export** | Convert results to CSV/Excel | `python tools/cu-results-export/export.py` |
+| **cu-cost-estimator** | Estimate and summarize CU processing costs | `python tools/cu-cost-estimator/cu_cost_estimator.py` |
 | **cu-segment-visualizer** | Annotate PDFs with segments | `python tools/cu-segment-visualizer/visualize_segments.py` |
 | **cu-visualize** | HTML field viewer | Open `tools/cu-visualize/cuDocVisualizer.html` |
 | **pii-redact** | Redact PII from PDFs | `python tools/pii-redact/redact_pii.py` |
@@ -146,6 +152,9 @@ cd tools/cu-analyzer-run && python -m pytest tests/ -v
 
 # Run export tests
 cd tools/cu-results-export && python -m pytest tests/ -v
+
+# Run cost-estimator tests
+cd tools/cu-cost-estimator && python -m pytest tests/ -v
 ```
 
 ---
@@ -174,6 +183,10 @@ CU-Tools/
 │   │   └── content_understanding_client.py
 │   ├── cu-results-export/             # Export JSON results to CSV/Excel
 │   │   ├── export.py
+│   │   └── tests/
+│   ├── cu-cost-estimator/             # Estimate costs from schemas or actual usage
+│   │   ├── cu_cost_estimator.py
+│   │   ├── generate_cost_summary.py
 │   │   └── tests/
 │   ├── cu-segment-visualizer/         # Annotate PDFs with segmentation
 │   │   └── visualize_segments.py
