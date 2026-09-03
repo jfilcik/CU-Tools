@@ -270,18 +270,28 @@ def run_analysis(
     client: AzureContentUnderstandingClient,
     analyzer_id: str,
     file_path: Path,
-    timeout: int = 180
+    timeout: int = 180,
+    diagnostics: bool = False,
 ) -> Dict[str, Any]:
     """Run analysis on a single file and return result."""
-    response = client.begin_analyze_binary(analyzer_id, str(file_path))
-    result = client.poll_result(response, timeout_seconds=timeout)
+    response = client.begin_analyze_binary(
+        analyzer_id,
+        str(file_path),
+        diagnostics=diagnostics,
+    )
+    result = client.poll_result(
+        response,
+        timeout_seconds=timeout,
+        diagnostics=diagnostics,
+    )
     return result
 
 
 def run_layout_analysis(
     client: AzureContentUnderstandingClient,
     file_path: Path,
-    timeout: int = 180
+    timeout: int = 180,
+    diagnostics: bool = False,
 ) -> tuple:
     """Run prebuilt-layout analysis to extract document structure.
     
@@ -289,15 +299,24 @@ def run_layout_analysis(
         tuple: (response, result) - response is needed for extracting page images
     """
     # Use prebuilt-layout analyzer for document structure extraction
-    response = client.begin_analyze_binary("prebuilt-layout", str(file_path))
-    result = client.poll_result(response, timeout_seconds=timeout)
+    response = client.begin_analyze_binary(
+        "prebuilt-layout",
+        str(file_path),
+        diagnostics=diagnostics,
+    )
+    result = client.poll_result(
+        response,
+        timeout_seconds=timeout,
+        diagnostics=diagnostics,
+    )
     return response, result
 
 
 def run_read_analysis(
     client: AzureContentUnderstandingClient,
     file_path: Path,
-    timeout: int = 180
+    timeout: int = 180,
+    diagnostics: bool = False,
 ) -> tuple:
     """Run prebuilt-read analysis for simple text extraction in reading order.
     
@@ -309,8 +328,16 @@ def run_read_analysis(
         tuple: (response, result) - response is needed for extracting page images
     """
     # Use prebuilt-read analyzer for simple text extraction
-    response = client.begin_analyze_binary("prebuilt-read", str(file_path))
-    result = client.poll_result(response, timeout_seconds=timeout)
+    response = client.begin_analyze_binary(
+        "prebuilt-read",
+        str(file_path),
+        diagnostics=diagnostics,
+    )
+    result = client.poll_result(
+        response,
+        timeout_seconds=timeout,
+        diagnostics=diagnostics,
+    )
     return response, result
 
 
@@ -453,6 +480,7 @@ def create_run_metadata(
     iterations: int,
     test_type: str,
     api_version: Optional[str] = None,
+    diagnostics_requested: bool = False,
 ) -> Dict[str, Any]:
     """Create metadata file for the run."""
     return {
@@ -466,6 +494,7 @@ def create_run_metadata(
         "document_count": len(documents),
         "total_runs": len(documents) * iterations,
         "api_version": resolve_api_version(api_version),
+        "diagnostics_requested": diagnostics_requested,
     }
 
 
@@ -481,7 +510,8 @@ def process_single_document(
     results_dir: Path,
     timeout: int,
     is_layout: bool,
-    is_read: bool = False
+    is_read: bool = False,
+    diagnostics: bool = False,
 ) -> Tuple[bool, Dict[str, Any]]:
     """
     Process a single document (used for parallel processing).
@@ -493,14 +523,30 @@ def process_single_document(
         start_time = time.time()
         
         if is_layout:
-            response, result = run_layout_analysis(client, file_path, timeout)
+            response, result = run_layout_analysis(
+                client,
+                file_path,
+                timeout,
+                diagnostics=diagnostics,
+            )
             result_path = save_layout_result(client, response, result, results_dir, file_path.name)
         elif is_read:
-            response, result = run_read_analysis(client, file_path, timeout)
+            response, result = run_read_analysis(
+                client,
+                file_path,
+                timeout,
+                diagnostics=diagnostics,
+            )
             # Save read results using the same layout format (JSON + markdown)
             result_path = save_layout_result(client, response, result, results_dir, file_path.name)
         else:
-            result = run_analysis(client, analyzer_id, file_path, timeout)
+            result = run_analysis(
+                client,
+                analyzer_id,
+                file_path,
+                timeout,
+                diagnostics=diagnostics,
+            )
             result_path = save_result(
                 result, results_dir, file_path.name, 
                 iteration, run_id, analyzer_id
@@ -580,6 +626,14 @@ Examples:
     )
     parser.add_argument("--max-workers", type=int, default=1,
                         help="Number of parallel workers for processing documents (default: 1, recommended: 3-5)")
+    parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help=(
+            "Send x-ms-diagnostics: true on analyze and result-polling requests. "
+            "GA uses this as an opt-in; Preview may return infos without it."
+        ),
+    )
     
     # Validation
     parser.add_argument("--validate", action="store_true", 
@@ -710,6 +764,7 @@ Examples:
         iterations=args.iterations,
         test_type=test_type,
         api_version=args.api_version,
+        diagnostics_requested=args.diagnostics,
     )
     
     # Add protected files info to metadata
@@ -762,7 +817,8 @@ Examples:
                 success, result_dict = process_single_document(
                     client, file_path, file_idx, len(files),
                     iteration, args.iterations, analyzer_id, run_id,
-                    results_dir, args.timeout, args.layout, args.read
+                    results_dir, args.timeout, args.layout, args.read,
+                    args.diagnostics
                 )
                 
                 if success:
@@ -783,7 +839,8 @@ Examples:
                     process_single_document,
                     client, file_path, file_idx, len(files),
                     iteration, args.iterations, analyzer_id, run_id,
-                    results_dir, args.timeout, args.layout, args.read
+                    results_dir, args.timeout, args.layout, args.read,
+                    args.diagnostics
                 ): (file_path, file_idx, iteration)
                 for file_path, file_idx, iteration in tasks
             }

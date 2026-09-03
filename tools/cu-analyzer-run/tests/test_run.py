@@ -21,6 +21,7 @@ from run import (
     create_run_metadata,
     extract_markdown_from_layout,
     get_supported_files,
+    run_analysis,
     resolve_api_version,
 )
 
@@ -45,6 +46,45 @@ class TestApiVersion:
             api_version="2026-06-01-preview",
         )
         assert metadata["api_version"] == "2026-06-01-preview"
+
+
+class TestDiagnostics:
+    def test_run_analysis_requests_diagnostics(self, tmp_path):
+        sample = tmp_path / "sample.pdf"
+        sample.write_bytes(b"%PDF-1.4")
+        client = MagicMock()
+        client.poll_result.return_value = {"status": "succeeded"}
+
+        run_analysis(
+            client,
+            "prebuilt-invoice",
+            sample,
+            diagnostics=True,
+        )
+
+        client.begin_analyze_binary.assert_called_once_with(
+            "prebuilt-invoice",
+            str(sample),
+            diagnostics=True,
+        )
+        client.poll_result.assert_called_once_with(
+            client.begin_analyze_binary.return_value,
+            timeout_seconds=180,
+            diagnostics=True,
+        )
+
+    def test_metadata_records_diagnostics_request(self):
+        metadata = create_run_metadata(
+            "run-1",
+            "prebuilt-invoice",
+            "samples",
+            ["invoice.pdf"],
+            1,
+            "single",
+            diagnostics_requested=True,
+        )
+
+        assert metadata["diagnostics_requested"] is True
 
 
 # Test data paths

@@ -79,6 +79,7 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
 
 **Reusable Examples** (`examples/`):
 - `05-Agentic-Contract-Obligations/` - Preview agentic contract extraction with exact-quote evidence, CUAD preparation, and EvalLens evaluation
+- `06-Contract-Obligation-Golden-Set/` - Reviewed ten-contract atomic-obligation gold set with paired Standard and Agentic schemas, fail-closed evaluation, notebook, and measured comparison report
 
 ### Configuration
 

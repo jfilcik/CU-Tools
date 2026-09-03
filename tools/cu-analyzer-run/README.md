@@ -77,6 +77,7 @@ python create_and_test.py \
 | `--timeout` | Analysis timeout in seconds (default: 180) |
 | `--keep-analyzer` | Keep analyzer after testing (don't delete) |
 | `--api-version` | CU API version (default: from env or 2025-11-01) |
+| `--diagnostics` | Send `x-ms-diagnostics: true` on analyze and result-polling requests |
 | `--max-workers` | Number of parallel workers (default: 1, recommended: 3-5 for large batches) |
 
 ---
@@ -125,6 +126,14 @@ python run.py \
   --input samples/invoice_001.pdf \
   --output test_results/single/
 
+# Request diagnostic infos such as LLMStats
+python run.py \
+  --analyzer-id prebuilt-invoice \
+  --input samples/invoice_001.pdf \
+  --output test_results/invoice_diagnostics/ \
+  --api-version 2025-11-01 \
+  --diagnostics
+
 # Batch analysis with parallel processing (5 documents at once)
 python run.py \
   --analyzer-id invoice-v1 \
@@ -152,7 +161,15 @@ python run.py \
 | `--timeout`, `-t` | Timeout in seconds per analysis (default: 180) |
 | `--run-id` | Custom run ID (auto-generated if not specified) |
 | `--api-version` | CU API version (default: from env or 2025-11-01) |
+| `--diagnostics` | Send `x-ms-diagnostics: true` on analyze and result-polling requests |
 | `--max-workers` | Number of parallel workers (default: 1, recommended: 3-5 for large batches) |
+
+For `2025-11-01`, use `--diagnostics` to opt in to diagnostic `infos`. The
+header must be present when retrieving `analyzerResults/{id}`; CU-Tools sends it
+on both the initial analyze request and every polling request. The
+`2026-06-01-preview` service may return diagnostic `infos` without the flag.
+Messages such as `LLMStats` are human-readable diagnostics and should not be
+parsed as a stable telemetry schema.
 
 ---
 

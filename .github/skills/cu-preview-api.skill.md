@@ -75,4 +75,7 @@ Before paid scale or stability work:
 
 Long contracts can exceed ten minutes. Treat timeout as a latency/capacity result, not as proof that the schema contract was rejected. Do not silently replace `config.workflow` with another preview property.
 
-See `Agents.md` for authoritative API rules and `examples/05-Agentic-Contract-Obligations/` for a tested implementation.
+See `Agents.md` for authoritative API rules,
+`examples/05-Agentic-Contract-Obligations/` for broad preview testing, and
+`examples/06-Contract-Obligation-Golden-Set/` for a controlled Standard-vs-
+Agentic comparison on reviewed atomic obligations.

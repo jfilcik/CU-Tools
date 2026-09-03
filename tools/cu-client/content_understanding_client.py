@@ -659,7 +659,12 @@ class AzureContentUnderstandingClient:
         self._logger.info(f"Deleting analyzer: {analyzer_id}")
         return response
 
-    def begin_analyze_url(self, analyzer_id: str, url: str) -> Response:
+    def begin_analyze_url(
+        self,
+        analyzer_id: str,
+        url: str,
+        diagnostics: bool = False,
+    ) -> Response:
         """
         Begins the analysis of a document from a URL using the specified analyzer.
         Uses the :analyze endpoint for URL-based analysis.
@@ -667,6 +672,8 @@ class AzureContentUnderstandingClient:
         Args:
             analyzer_id (str): The ID of the analyzer to use.
             url (str): The URL of the document to analyze.
+            diagnostics (bool): Request diagnostic information such as LLM
+                telemetry by sending ``x-ms-diagnostics: true``.
 
         Returns:
             Response: The response from the analysis request.
@@ -682,6 +689,8 @@ class AzureContentUnderstandingClient:
         data = {"inputs": [{"url": url}]}
         headers = {"Content-Type": "application/json"}
         headers.update(self._headers)
+        if diagnostics:
+            headers["x-ms-diagnostics"] = "true"
         
         response = requests.post(
             url=self._get_analyze_url(
@@ -697,7 +706,12 @@ class AzureContentUnderstandingClient:
         )
         return response
     
-    def begin_analyze_binary(self, analyzer_id: str, file_location: str) -> Response:
+    def begin_analyze_binary(
+        self,
+        analyzer_id: str,
+        file_location: str,
+        diagnostics: bool = False,
+    ) -> Response:
         """
         Begins the analysis of a single binary file using the specified analyzer.
         Uses the :analyzeBinary endpoint required by GA API 2025-11-01.
@@ -711,6 +725,8 @@ class AzureContentUnderstandingClient:
         Args:
             analyzer_id (str): The ID of the analyzer to use.
             file_location (str): The local path to the file to analyze.
+            diagnostics (bool): Request diagnostic information such as LLM
+                telemetry by sending ``x-ms-diagnostics: true``.
 
         Returns:
             Response: The response from the analysis request.
@@ -733,6 +749,8 @@ class AzureContentUnderstandingClient:
         
         headers = {"Content-Type": "application/octet-stream"}
         headers.update(self._headers)
+        if diagnostics:
+            headers["x-ms-diagnostics"] = "true"
         
         response = requests.post(
             url=self._get_analyze_binary_url(
@@ -1082,6 +1100,7 @@ class AzureContentUnderstandingClient:
         response: Response,
         timeout_seconds: int = POLL_TIMEOUT_SECONDS,
         polling_interval_seconds: int = 2,
+        diagnostics: bool = False,
     ) -> Dict[str, Any]:
         """
         Polls the result of an asynchronous operation until it completes or times out.
@@ -1090,6 +1109,8 @@ class AzureContentUnderstandingClient:
             response (Response): The initial response object containing the operation location.
             timeout_seconds (int, optional): The maximum number of seconds to wait for the operation to complete. Defaults to 120.
             polling_interval_seconds (int, optional): The number of seconds to wait between polling attempts. Defaults to 2.
+            diagnostics (bool): Request diagnostic information such as LLM
+                telemetry on result retrieval.
 
         Raises:
             ValueError: If the operation location is not found in the response headers.
@@ -1105,6 +1126,8 @@ class AzureContentUnderstandingClient:
 
         headers = {"Content-Type": "application/json"}
         headers.update(self._headers)
+        if diagnostics:
+            headers["x-ms-diagnostics"] = "true"
 
         start_time = time.time()
         while True:
@@ -1114,7 +1137,7 @@ class AzureContentUnderstandingClient:
                     f"Operation timed out after {timeout_seconds:.2f} seconds."
                 )
 
-            response = requests.get(operation_location, headers=self._headers)
+            response = requests.get(operation_location, headers=headers)
             self._raise_for_status_with_detail(response)
             status = response.json().get("status").lower()
             if status == "succeeded":

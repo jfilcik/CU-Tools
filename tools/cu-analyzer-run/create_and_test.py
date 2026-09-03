@@ -742,7 +742,8 @@ def process_single_document(
     analyzer_id: str,
     run_id: str,
     results_dir: Path,
-    timeout: int
+    timeout: int,
+    diagnostics: bool = False,
 ) -> Tuple[bool, Dict[str, Any]]:
     """
     Process a single document (used for parallel processing).
@@ -751,7 +752,13 @@ def process_single_document(
     try:
         start_time = time.time()
         
-        result = run_analysis(client, analyzer_id, file_path, timeout)
+        result = run_analysis(
+            client,
+            analyzer_id,
+            file_path,
+            timeout,
+            diagnostics=diagnostics,
+        )
         
         result_path = save_result(
             result, results_dir, file_path.name,
@@ -839,6 +846,14 @@ def main():
         type=int,
         default=1,
         help="Number of parallel workers for processing documents (default: 1, recommended: 3-5)"
+    )
+    parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help=(
+            "Send x-ms-diagnostics: true on analyze and result-polling requests. "
+            "GA uses this as an opt-in; Preview may return infos without it."
+        ),
     )
     parser.add_argument(
         "--inner-schema",
@@ -1168,6 +1183,7 @@ def main():
             iterations=args.iterations,
             test_type=test_type,
             api_version=args.api_version,
+            diagnostics_requested=args.diagnostics,
         )
         metadata["schema_file"] = str(schema_path)
         metadata["analyzer_created"] = True
@@ -1238,7 +1254,7 @@ def main():
                     success, result_dict = process_single_document(
                         client, file_path, file_idx, len(files),
                         iteration, args.iterations, analyzer_id, run_id,
-                        results_dir, args.timeout
+                        results_dir, args.timeout, args.diagnostics
                     )
                     
                     if success:
@@ -1259,7 +1275,7 @@ def main():
                         process_single_document,
                         client, file_path, file_idx, len(files),
                         iteration, args.iterations, analyzer_id, run_id,
-                        results_dir, args.timeout
+                        results_dir, args.timeout, args.diagnostics
                     ): (file_path, file_idx, iteration)
                     for file_path, file_idx, iteration in tasks
                 }

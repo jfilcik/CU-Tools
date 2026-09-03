@@ -89,6 +89,11 @@ When the analyzer uses a preview-only contract, append the exact
 `cu-preview-api.skill.md`: one file per request, short smoke test first, and
 explicit cost confirmation before scale or repeated runs.
 
+For a Standard-vs-Agentic comparison, keep the input documents and
+`fieldSchema` identical, run Standard first, clean up its analyzer, and then run
+Agentic. Score failed documents fail-closed rather than reporting only
+survivors. 
+
 **Stability eval command**:
 ```bash
 python tools/cu-analyzer-run/run.py \
