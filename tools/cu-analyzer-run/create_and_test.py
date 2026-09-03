@@ -111,6 +111,7 @@ except ImportError:
 # Import existing run.py functions
 from run import (
     get_client,
+    resolve_api_version,
     get_supported_files,
     check_files_for_protection,
     run_analysis,
@@ -119,7 +120,11 @@ from run import (
 )
 
 
-def validate_schema(schema_path: Path, strict: bool = False) -> bool:
+def validate_schema(
+    schema_path: Path,
+    strict: bool = False,
+    api_version: Optional[str] = None,
+) -> bool:
     """
     Validate analyzer schema using cu-analyzer-validate.
     
@@ -139,7 +144,7 @@ def validate_schema(schema_path: Path, strict: bool = False) -> bool:
     print(f"Validating schema: {schema_path.name}")
     print(f"{'='*60}")
     
-    result = validate_cu_analyzer_file(str(schema_path))
+    result = validate_cu_analyzer_file(str(schema_path), api_version=api_version)
     
     # Print summary
     print(f"\n{result.get_summary()}\n")
@@ -737,7 +742,8 @@ def process_single_document(
     analyzer_id: str,
     run_id: str,
     results_dir: Path,
-    timeout: int
+    timeout: int,
+    diagnostics: bool = False,
 ) -> Tuple[bool, Dict[str, Any]]:
     """
     Process a single document (used for parallel processing).
@@ -746,7 +752,13 @@ def process_single_document(
     try:
         start_time = time.time()
         
-        result = run_analysis(client, analyzer_id, file_path, timeout)
+        result = run_analysis(
+            client,
+            analyzer_id,
+            file_path,
+            timeout,
+            diagnostics=diagnostics,
+        )
         
         result_path = save_result(
             result, results_dir, file_path.name,
@@ -824,13 +836,24 @@ def main():
     parser.add_argument(
         "--api-version",
         type=str,
-        help="CU API version (default: from env or 2025-11-01)"
+        help=(
+            "CU API version (default: CU_API_VERSION or 2025-11-01). "
+            "Use 2026-06-01-preview for agentic preview analyzers."
+        )
     )
     parser.add_argument(
         "--max-workers",
         type=int,
         default=1,
         help="Number of parallel workers for processing documents (default: 1, recommended: 3-5)"
+    )
+    parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help=(
+            "Send x-ms-diagnostics: true on analyze and result-polling requests. "
+            "GA uses this as an opt-in; Preview may return infos without it."
+        ),
     )
     parser.add_argument(
         "--inner-schema",
@@ -862,6 +885,8 @@ def main():
     )
     
     args = parser.parse_args()
+    load_dotenv()
+    args.api_version = resolve_api_version(args.api_version)
     
     # Validate mutually exclusive args
     if args.schema_dir and args.inner_schema:
@@ -935,7 +960,7 @@ def main():
         print(f"{'='*60}")
         for aid in schema_dir_order:
             p = schema_dir_paths[aid]
-            if not validate_schema(p, strict=False):
+            if not validate_schema(p, strict=False, api_version=args.api_version):
                 print(f"\n❌ Schema validation failed for '{aid}': {p}")
                 sys.exit(1)
         
@@ -959,7 +984,7 @@ def main():
         print(f"\n{'='*60}")
         print(f"Step 1: Validate Schema")
         print(f"{'='*60}")
-        if not validate_schema(schema_path, strict=False):
+        if not validate_schema(schema_path, strict=False, api_version=args.api_version):
             print("\n❌ Schema validation failed. Please fix errors and try again.")
             sys.exit(1)
         
@@ -1003,7 +1028,7 @@ def main():
                 print(f"Validating Inner Schemas")
                 print(f"{'='*60}")
                 for alias, inner_path in inner_schemas.items():
-                    if not validate_schema(inner_path, strict=False):
+                    if not validate_schema(inner_path, strict=False, api_version=args.api_version):
                         print(f"\n❌ Inner schema validation failed for '{alias}': {inner_path}")
                         sys.exit(1)
             
@@ -1156,7 +1181,9 @@ def main():
             input_path=str(input_path),
             documents=[f.name for f in files],
             iterations=args.iterations,
-            test_type=test_type
+            test_type=test_type,
+            api_version=args.api_version,
+            diagnostics_requested=args.diagnostics,
         )
         metadata["schema_file"] = str(schema_path)
         metadata["analyzer_created"] = True
@@ -1227,7 +1254,7 @@ def main():
                     success, result_dict = process_single_document(
                         client, file_path, file_idx, len(files),
                         iteration, args.iterations, analyzer_id, run_id,
-                        results_dir, args.timeout
+                        results_dir, args.timeout, args.diagnostics
                     )
                     
                     if success:
@@ -1248,7 +1275,7 @@ def main():
                         process_single_document,
                         client, file_path, file_idx, len(files),
                         iteration, args.iterations, analyzer_id, run_id,
-                        results_dir, args.timeout
+                        results_dir, args.timeout, args.diagnostics
                     ): (file_path, file_idx, iteration)
                     for file_path, file_idx, iteration in tasks
                 }

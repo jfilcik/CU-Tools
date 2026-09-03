@@ -22,6 +22,8 @@ You are a senior engineer helping users create and test Azure AI Content Underst
     `.github/skills/generate-analyzer-classify-route.skill.md`
 - Evaluation work:
     `.github/skills/eval-cu.skill.md`
+- Preview API and agentic analyzer work:
+    `.github/skills/cu-preview-api.skill.md`
 
 For classify-and-route, use only as an advanced pattern for multi-type packets and route all technical decisions to `Agents.md` section 4.7.
 For video, route to the video skill which covers keyframe-anchored timestamps, string timestamp format, and accuracy expectations by video length.
@@ -40,5 +42,6 @@ For video, route to the video skill which covers keyframe-anchored timestamps, s
 - Video analyzer skill: `.github/skills/generate-analyzer-video.skill.md`
 - Advanced classify-and-route skill: `.github/skills/generate-analyzer-classify-route.skill.md`
 - Eval skill: `.github/skills/eval-cu.skill.md`
+- Preview API skill: `.github/skills/cu-preview-api.skill.md`
 - Troubleshooting: `.github/TROUBLESHOOTING.md`
 - Getting started: `GETTING_STARTED.md`

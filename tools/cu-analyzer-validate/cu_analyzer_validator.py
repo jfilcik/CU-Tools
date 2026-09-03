@@ -176,6 +176,7 @@ class CUAnalyzerValidator:
     MAX_NESTING_DEPTH = 10
     MAX_TOTAL_FIELDS = 500
     MAX_ARRAY_DEPTH = 5
+    AGENTIC_PREVIEW_API_VERSION = "2026-06-01-preview"
     
     # Valid top-level keys in CU analyzer schemas
     VALID_TOP_LEVEL_KEYS = frozenset({
@@ -213,14 +214,16 @@ class CUAnalyzerValidator:
         "contentCategories": dict,
         "enableFace": bool,
         "disableFaceBlurring": bool,
+        "workflow": {"Agentic"},
         "_experimental": dict,
     }
     
     # Field name pattern (alphanumeric, starting with letter, camelCase recommended)
     FIELD_NAME_PATTERN = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')
     
-    def __init__(self):
+    def __init__(self, api_version: Optional[str] = None):
         self.result = ValidationResult()
+        self.api_version = api_version
         self._visited_paths: Set[str] = set()
         self._current_depth = 0
         self._field_names_seen: Set[str] = set()
@@ -381,6 +384,19 @@ class CUAnalyzerValidator:
                         f"'{key}' must be an array, got {type(value).__name__}",
                         "Use square brackets: []"
                     )
+
+        if (
+            "workflow" in config_section
+            and self.api_version != self.AGENTIC_PREVIEW_API_VERSION
+        ):
+            self.result.add_error(
+                "config.workflow",
+                "'workflow' is only supported by the agentic preview API",
+                (
+                    "Validate and run with "
+                    f"--api-version {self.AGENTIC_PREVIEW_API_VERSION}"
+                ),
+            )
         
         # Check for conflicting options
         if config_section.get("enableSegment") and config_section.get("segmentPerPage"):
@@ -823,7 +839,10 @@ class CUAnalyzerValidator:
                 )
 
 
-def validate_cu_analyzer(config: Union[str, Dict[str, Any]]) -> ValidationResult:
+def validate_cu_analyzer(
+    config: Union[str, Dict[str, Any]],
+    api_version: Optional[str] = None,
+) -> ValidationResult:
     """
     Validate a CU analyzer configuration.
     
@@ -840,11 +859,14 @@ def validate_cu_analyzer(config: Union[str, Dict[str, Any]]) -> ValidationResult
         >>> print(result.is_valid)
         True
     """
-    validator = CUAnalyzerValidator()
+    validator = CUAnalyzerValidator(api_version=api_version)
     return validator.validate(config)
 
 
-def validate_cu_analyzer_file(file_path: Union[str, Path]) -> ValidationResult:
+def validate_cu_analyzer_file(
+    file_path: Union[str, Path],
+    api_version: Optional[str] = None,
+) -> ValidationResult:
     """
     Validate a CU analyzer configuration from a JSON file.
     
@@ -913,10 +935,13 @@ def validate_cu_analyzer_file(file_path: Union[str, Path]) -> ValidationResult:
             "Consider saving without BOM for better compatibility"
         )
     
-    return validate_cu_analyzer(content)
+    return validate_cu_analyzer(content, api_version=api_version)
 
 
-def validate_and_print(config: Union[str, Dict[str, Any], Path]) -> bool:
+def validate_and_print(
+    config: Union[str, Dict[str, Any], Path],
+    api_version: Optional[str] = None,
+) -> bool:
     """
     Convenience function to validate and print results.
     
@@ -928,9 +953,9 @@ def validate_and_print(config: Union[str, Dict[str, Any], Path]) -> bool:
     """
     if isinstance(config, Path) or (isinstance(config, str) and 
                                      (config.endswith('.json') or '\\' in config or '/' in config)):
-        result = validate_cu_analyzer_file(config)
+        result = validate_cu_analyzer_file(config, api_version=api_version)
     else:
-        result = validate_cu_analyzer(config)
+        result = validate_cu_analyzer(config, api_version=api_version)
     
     print(result.get_all_messages())
     return result.is_valid
@@ -938,15 +963,23 @@ def validate_and_print(config: Union[str, Dict[str, Any], Path]) -> bool:
 
 # Command-line interface
 if __name__ == "__main__":
+    import argparse
     import sys
-    
-    if len(sys.argv) < 2:
-        print("Usage: python cu_analyzer_validator.py <path_to_analyzer.json>")
-        print("\nValidates a CU (Custom Understanding) Analyzer JSON configuration file.")
-        print("\nExample:")
-        print("  python cu_analyzer_validator.py my-analyzer.json")
-        sys.exit(1)
-    
-    file_path = sys.argv[1]
-    is_valid = validate_and_print(file_path)
+
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+    parser = argparse.ArgumentParser(
+        description="Validate a Content Understanding analyzer JSON configuration."
+    )
+    parser.add_argument("schema", help="Path to the analyzer JSON file")
+    parser.add_argument(
+        "--api-version",
+        help=(
+            "API contract to validate against. Required for preview-only schema "
+            "properties such as config.workflow."
+        ),
+    )
+    cli_args = parser.parse_args()
+    is_valid = validate_and_print(cli_args.schema, api_version=cli_args.api_version)
     sys.exit(0 if is_valid else 1)

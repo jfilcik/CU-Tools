@@ -1,0 +1,72 @@
+execution_mode: "local"
+
+data_paths:
+  evaluation_output_folder: "output"
+  artifacts_folder: "artifacts"
+
+modules:
+  contract_obligations:
+    dataset:
+      source: local
+      pred_path: "data/pred.jsonl"
+      gt_path: "data/gt.jsonl"
+      key: "doc_id"
+
+    evaluators:
+      include:
+        - obligation_discovery
+        - obligation_type_accuracy
+        - party_role_accuracy
+        - quote_groundedness
+        - quote_alignment
+        - obligation_completeness
+        - duplicate_obligation
+      exclude: []
+
+      definitions:
+        obligation_discovery:
+          enabled: true
+          threshold:
+            obligation_discovery: 0.75
+          config:
+            match_threshold: 0.55
+
+        obligation_type_accuracy:
+          enabled: true
+          threshold:
+            obligation_type_accuracy: 0.70
+          config:
+            match_threshold: 0.55
+
+        party_role_accuracy:
+          enabled: true
+          threshold:
+            party_role_accuracy: 0.80
+          config:
+            match_threshold: 0.55
+
+        quote_groundedness:
+          enabled: true
+          threshold:
+            quote_groundedness: 0.90
+          config: {}
+
+        quote_alignment:
+          enabled: true
+          threshold:
+            quote_alignment: 0.75
+          config:
+            match_threshold: 0.55
+
+        obligation_completeness:
+          enabled: true
+          threshold:
+            obligation_completeness: 0.80
+          config:
+            match_threshold: 0.55
+
+        duplicate_obligation:
+          enabled: true
+          threshold:
+            duplicate_obligation: 0.95
+          config: {}

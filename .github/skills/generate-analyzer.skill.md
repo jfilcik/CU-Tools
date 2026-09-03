@@ -13,6 +13,10 @@ Use this workflow for a single document type.
 4. Validate schema.
 5. Create analyzer and test.
 6. Export results and iterate to v2 if needed.
+
+If the request uses a preview API feature or agentic mode, load
+`cu-preview-api.skill.md` first and pass its API version explicitly to validation,
+creation, analysis, and evaluation commands. Never change the GA default globally.
 Core commands:
 python tools/cu-analyzer-run/run.py --layout --input {sample_folder} --output {project_folder}/layout_results
 python tools/cu-analyzer-validate/cu_analyzer_validator.py {project_folder}/schemas/{name}_v1.json
@@ -50,9 +54,16 @@ Critical rule: CU is two-stage. Describe text and structure, not visual styling.
 python tools/cu-analyzer-validate/cu_analyzer_validator.py {project_folder}/schemas/{name}_v1.json
 Fix all errors before creating the analyzer.
 
+For a preview schema, append `--api-version {preview_api_version}`. Preview-only
+properties must fail validation unless the matching API contract is explicit.
+
 ### 5) Create and Test
 python tools/cu-analyzer-run/create_and_test.py --schema {project_folder}/schemas/{name}_v1.json --input {sample_folder} --output {project_folder}/test_results/v1
 Optional: add --keep-analyzer when you need to reuse the analyzer ID.
+
+For agentic preview analyzers, process one input file per request, append
+`--api-version 2026-06-01-preview`, start with a short compatibility sample, and
+use the preview skill's cost and timeout gate before running a corpus.
 
 ### 6) Export and Evaluate
 python tools/cu-results-export/export.py --input {project_folder}/test_results/v1 --output {project_folder}/test_results/v1/results.csv
@@ -98,3 +109,4 @@ See `generate-analyzer-classify-route.skill.md` and `Agents.md` section 4.7 for 
 - Prompt support: .github/prompts/analyze-document-structure.prompt.md
 - Prompt support: .github/prompts/generate-analyzer-schema.prompt.md
 - Technical rules: Agents.md section 4.5 and section 4.6
+- Preview and agentic API workflow: cu-preview-api.skill.md

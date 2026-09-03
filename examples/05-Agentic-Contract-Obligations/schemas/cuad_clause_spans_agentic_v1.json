@@ -1,0 +1,209 @@
+{
+  "description": "Extract exact, contiguous contract text spans for the 31 CUAD review-clause categories. Return only text copied from the document, keep distinct occurrences separate, and do not paraphrase, summarize, stitch spans, or infer absent categories.",
+  "baseAnalyzerId": "prebuilt-document",
+  "models": {
+    "completion": "gpt-5.2"
+  },
+  "config": {
+    "workflow": "Agentic",
+    "returnDetails": true,
+    "estimateFieldSourceAndConfidence": true
+  },
+  "fieldSchema": {
+    "fields": {
+      "ClauseSpans": {
+        "type": "object",
+        "method": "generate",
+        "description": "Extract every distinct clause occurrence matching the category definitions below. Each array item must be one exact, contiguous, character-for-character document span. Return an empty array when a category is absent.",
+        "properties": {
+          "MostFavoredNation": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans providing that if a third party receives better terms for relevant technology, goods, or services, a party is entitled to those better terms. Return each distinct occurrence separately.",
+            "items": {"type": "string", "description": "One exact contiguous Most Favored Nation clause span."}
+          },
+          "NonCompete": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans restricting a party from competing with the counterparty or operating in a geography, business, or technology sector, during or after the contract.",
+            "items": {"type": "string", "description": "One exact contiguous Non-Compete clause span."}
+          },
+          "Exclusivity": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans imposing exclusive dealing, requirements purchasing, or prohibitions on licensing, selling, collaborating, or working with third parties.",
+            "items": {"type": "string", "description": "One exact contiguous Exclusivity clause span."}
+          },
+          "NoSolicitOfCustomers": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans restricting a party from contracting with or soliciting customers or partners of the counterparty.",
+            "items": {"type": "string", "description": "One exact contiguous No-Solicit of Customers clause span."}
+          },
+          "CompetitiveRestrictionException": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans stating exceptions or carve-outs to Non-Compete, Exclusivity, or No-Solicit of Customers restrictions.",
+            "items": {"type": "string", "description": "One exact contiguous Competitive Restriction Exception span."}
+          },
+          "NoSolicitOfEmployees": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans restricting solicitation or hiring of the counterparty's employees or contractors.",
+            "items": {"type": "string", "description": "One exact contiguous No-Solicit of Employees clause span."}
+          },
+          "NonDisparagement": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans requiring a party not to disparage the counterparty.",
+            "items": {"type": "string", "description": "One exact contiguous Non-Disparagement clause span."}
+          },
+          "TerminationForConvenience": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans allowing termination without cause, usually by notice and expiration of a waiting period.",
+            "items": {"type": "string", "description": "One exact contiguous Termination for Convenience clause span."}
+          },
+          "RofrRofoRofn": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans granting a right of first refusal, first offer, or first negotiation concerning equity, technology, assets, products, or services.",
+            "items": {"type": "string", "description": "One exact contiguous ROFR, ROFO, or ROFN clause span."}
+          },
+          "ChangeOfControl": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans granting termination rights or requiring consent or notice when a party undergoes a merger, stock sale, asset sale, or other change of control.",
+            "items": {"type": "string", "description": "One exact contiguous Change of Control clause span."}
+          },
+          "AntiAssignment": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans restricting assignment or requiring consent or notice before assignment to a third party.",
+            "items": {"type": "string", "description": "One exact contiguous Anti-Assignment clause span."}
+          },
+          "RevenueProfitSharing": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans requiring one party to share revenue or profit with the counterparty.",
+            "items": {"type": "string", "description": "One exact contiguous Revenue or Profit Sharing clause span."}
+          },
+          "PriceRestrictions": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans restricting a party's ability to raise or reduce prices for technology, goods, or services.",
+            "items": {"type": "string", "description": "One exact contiguous Price Restrictions clause span."}
+          },
+          "MinimumCommitment": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans requiring a minimum order size, purchase amount, units, revenue, or other commitment per period.",
+            "items": {"type": "string", "description": "One exact contiguous Minimum Commitment clause span."}
+          },
+          "VolumeRestriction": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans imposing a fee increase, consent requirement, or other restriction when use or volume exceeds a threshold.",
+            "items": {"type": "string", "description": "One exact contiguous Volume Restriction clause span."}
+          },
+          "IpOwnershipAssignment": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans assigning intellectual property created by one party to the counterparty, immediately or upon stated events.",
+            "items": {"type": "string", "description": "One exact contiguous IP Ownership Assignment clause span."}
+          },
+          "JointIpOwnership": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans providing for joint or shared ownership of intellectual property between the parties.",
+            "items": {"type": "string", "description": "One exact contiguous Joint IP Ownership clause span."}
+          },
+          "LicenseGrant": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans granting a license from one party to the counterparty.",
+            "items": {"type": "string", "description": "One exact contiguous License Grant clause span."}
+          },
+          "NonTransferableLicense": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans limiting transfer or assignment of a granted license to a third party.",
+            "items": {"type": "string", "description": "One exact contiguous Non-Transferable License clause span."}
+          },
+          "AffiliateLicenseLicensor": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans where the license grant is made by licensor affiliates or includes intellectual property of licensor affiliates.",
+            "items": {"type": "string", "description": "One exact contiguous Affiliate License-Licensor clause span."}
+          },
+          "AffiliateLicenseLicensee": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans granting licensed rights to the licensee, sublicensee, or their affiliates.",
+            "items": {"type": "string", "description": "One exact contiguous Affiliate License-Licensee clause span."}
+          },
+          "UnlimitedAllYouCanEatLicense": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans granting enterprise-wide, all-you-can-eat, or otherwise unlimited license usage.",
+            "items": {"type": "string", "description": "One exact contiguous Unlimited or All-You-Can-Eat License clause span."}
+          },
+          "IrrevocableOrPerpetualLicense": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans stating that a license grant is irrevocable or perpetual.",
+            "items": {"type": "string", "description": "One exact contiguous Irrevocable or Perpetual License clause span."}
+          },
+          "SourceCodeEscrow": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans requiring source code deposit into escrow and/or defining release to the counterparty upon specified events.",
+            "items": {"type": "string", "description": "One exact contiguous Source Code Escrow clause span."}
+          },
+          "PostTerminationServices": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans imposing duties after termination or expiration, including transition, payment, transfer, wind-down, or last-buy commitments.",
+            "items": {"type": "string", "description": "One exact contiguous Post-Termination Services clause span."}
+          },
+          "AuditRights": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans granting a right to audit books, records, systems, or locations to assess contractual compliance.",
+            "items": {"type": "string", "description": "One exact contiguous Audit Rights clause span."}
+          },
+          "LiquidatedDamages": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans awarding predetermined damages for breach or imposing a termination fee.",
+            "items": {"type": "string", "description": "One exact contiguous Liquidated Damages clause span."}
+          },
+          "WarrantyDuration": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans stating the duration of a warranty against defects or errors in technology, products, or services.",
+            "items": {"type": "string", "description": "One exact contiguous Warranty Duration clause span."}
+          },
+          "Insurance": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans requiring insurance to be obtained or maintained by one party, including coverage requirements.",
+            "items": {"type": "string", "description": "One exact contiguous Insurance clause span."}
+          },
+          "CovenantNotToSue": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans restricting a party from contesting intellectual-property validity or bringing specified claims against the counterparty.",
+            "items": {"type": "string", "description": "One exact contiguous Covenant Not to Sue clause span."}
+          },
+          "ThirdPartyBeneficiary": {
+            "type": "array",
+            "method": "generate",
+            "description": "Exact spans identifying a non-contracting party as a beneficiary that may enforce contractual rights.",
+            "items": {"type": "string", "description": "One exact contiguous Third Party Beneficiary clause span."}
+          }
+        }
+      }
+    }
+  }
+}

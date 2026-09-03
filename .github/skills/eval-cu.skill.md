@@ -46,6 +46,7 @@ Gather required information:
 | Input documents | Folder with 20-100+ docs | 1-3 specific documents |
 | Iterations | 1 (default) | 10 (recommended) |
 | Output folder | Required | Required |
+| API version | Explicit when preview | Explicit when preview |
 
 **Example prompts**:
 
@@ -82,6 +83,16 @@ python tools/cu-analyzer-run/run.py \
   --input {documents_folder} \
   --output {output_folder}
 ```
+
+When the analyzer uses a preview-only contract, append the exact
+`--api-version` used to create it. For agentic preview runs, follow
+`cu-preview-api.skill.md`: one file per request, short smoke test first, and
+explicit cost confirmation before scale or repeated runs.
+
+For a Standard-vs-Agentic comparison, keep the input documents and
+`fieldSchema` identical, run Standard first, clean up its analyzer, and then run
+Agentic. Score failed documents fail-closed rather than reporting only
+survivors. 
 
 **Stability eval command**:
 ```bash
@@ -327,6 +338,7 @@ When evaluating, consider these metrics per field:
 ## Related Skills
 
 - `generate-analyzer.skill.md` - Create new analyzer (often done before evaluating)
+- `cu-preview-api.skill.md` - Preview API compatibility, test resource, and cost gate
 
 ## Related Prompts
 

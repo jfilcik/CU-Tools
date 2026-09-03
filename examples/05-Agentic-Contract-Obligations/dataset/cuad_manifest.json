@@ -1,0 +1,23 @@
+{
+  "dataset": "Contract Understanding Atticus Dataset (CUAD) v1",
+  "repository": "https://github.com/TheAtticusProject/cuad",
+  "revision": "67faa0e6023b04fcaae6cc09497ab00e5d63a2a2",
+  "archive_url": "https://raw.githubusercontent.com/TheAtticusProject/cuad/67faa0e6023b04fcaae6cc09497ab00e5d63a2a2/data.zip",
+  "archive_sha256": "f8161d18bea4e9c05e78fa6dda61c19c846fb8087ea969c172753bc2f45b999a",
+  "allowed_archive_entries": [
+    "CUADv1.json",
+    "test.json",
+    "train_separate_questions.json"
+  ],
+  "selection": {
+    "seed": "cu-tools-contract-obligations-v1",
+    "development_count": 5,
+    "held_out_count": 20,
+    "atomic_annotation_count": 6,
+    "strategy": "deterministic category-coverage greedy selection"
+  },
+  "license_and_attribution": {
+    "source_notice": "Download from the official CUAD repository and review its license before use.",
+    "raw_content_committed": false
+  }
+}
