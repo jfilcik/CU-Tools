@@ -123,6 +123,7 @@ Step-by-step examples using public sample data:
 | **[02-Invoice-Extraction](Examples/02-Invoice-Extraction/)** | Build a document analyzer using the agent-based workflow |
 | **[03-Video-Analysis](Examples/03-Video-Analysis/)** | Build a video analyzer with keyframe-anchored timestamps |
 | **[05-Agentic-Contract-Obligations](examples/05-Agentic-Contract-Obligations/)** | Build and evaluate a quote-grounded agentic contract analyzer with the preview API |
+| **[06-Contract-Obligation-Golden-Set](examples/06-Contract-Obligation-Golden-Set/)** | Compare Standard and Agentic obligation extraction against ten reviewed short contracts |
 
 Start with Tutorial 01 to explore the API, then follow 02 or 03 for the full agent-based workflow.
 
@@ -137,6 +138,7 @@ Start with Tutorial 01 to explore the API, then follow 02 or 03 for the full age
 | **cu-analyzer-validate** | Check schema before creating | `python tools/cu-analyzer-validate/cu_analyzer_validator.py` |
 | **cu-results-export** | Convert results to CSV/Excel | `python tools/cu-results-export/export.py` |
 | **cu-cost-estimator** | Estimate and summarize CU processing costs | `python tools/cu-cost-estimator/cu_cost_estimator.py` |
+| **[cu-prompt-cache](tools/cu-prompt-cache/README.md)** | Correlate model telemetry and measure token-weighted cache reuse | `python tools/cu-prompt-cache/prompt_cache.py` |
 | **cu-segment-visualizer** | Annotate PDFs with segments | `python tools/cu-segment-visualizer/visualize_segments.py` |
 | **cu-visualize** | HTML field viewer | Open `tools/cu-visualize/cuDocVisualizer.html` |
 | **pii-redact** | Redact PII from PDFs | `python tools/pii-redact/redact_pii.py` |
@@ -165,7 +167,9 @@ CU-Tools/
 ├── Examples/                          # 📖 Hands-on tutorials
 │   ├── 01-API-Testing/                # Explore REST API with .http files
 │   ├── 02-Invoice-Extraction/         # Document analyzer tutorial
-│   └── 03-Video-Analysis/             # Video analyzer tutorial
+│   ├── 03-Video-Analysis/             # Video analyzer tutorial
+│   ├── 05-Agentic-Contract-Obligations/
+│   └── 06-Contract-Obligation-Golden-Set/
 │
 ├── CU_API_Testing/                    # HTTP REST Client test files (also in Examples)
 │   ├── CU-API-Testing-Guide.http      # Complete API testing guide

@@ -60,6 +60,36 @@ If the requested group total is smaller than the available record count, the
 tool prints a warning and includes an `unassigned` summary. If the requested
 group total exceeds the available record count, the run fails fast.
 
+## Limitations: no deterministic CU-request-to-LLM-call join key
+
+The `AzureOpenAIRequestUsage` diagnostic record's full field set is:
+
+- Top level: `EnqueueTime`, `FluentdIngestTimestamp`, `Tenant`, `category`,
+  `correlationId`, `event`, `location`, `operationName`, `processID`,
+  `properties`, `resourceId`, `threadID`.
+- Nested `properties`: `cachedTokens`, `generatedTokens`,
+  `modelDeploymentName`, `modelName`, `modelVersion`, `promptTokens`,
+  `streamType`, `timeToFirstTokenMs`, `timeToLastTokenMs`.
+
+**None of these match any ID Content Understanding returns to the caller**
+(`operation-location`, `apim-request-id`, `x-ms-request-id`,
+`x-ms-correlation-request-id`, `x-ms-client-request-id`). `correlationId`
+looked like the obvious candidate but is not usable for this purpose:
+verified against a known run where several CU requests each fanned out into
+multiple model calls (CU's internal ~25-page chunking), every model call in
+the same CU request had a **distinct** `correlationId` — it identifies one
+AOAI-side model call, not the CU request that triggered it, and it does not
+group a CU request's own chunk calls together either. `processID`/`threadID`
+are worker-process identifiers reused across unrelated requests over time,
+not usable as a request key.
+
+Practical effect: this tool's `--request-call-counts` sequential-chunking
+correlation (submission-order + expected call count) is currently the only
+way to map these records back to specific CU requests. There is no shortcut
+that would make that correlation exact/robust — keep the time window tight
+around the known request timestamps (see Notes below) to avoid stray
+records shifting the grouping.
+
 ## Notes
 
 - The tool uses `DefaultAzureCredential`, so existing Azure CLI auth (`az login`)

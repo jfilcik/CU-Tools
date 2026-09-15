@@ -38,6 +38,8 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
 - `tools/cu-cost-estimator/`
   - `cu_cost_estimator.py` - Estimate CU costs from schemas or actual API usage
   - `generate_cost_summary.py` - Aggregate token usage and cost across result files
+- `tools/cu-prompt-cache/`
+  - `prompt_cache.py` - Correlate model-call telemetry with CU runs; validate cache-metric provenance, weighted cache ratios, and explicit-price scenarios. Supports offline exports and schema-checked, metadata-only Kusto reads.
 
 **Client Library**:
 - `tools/cu-client/`
