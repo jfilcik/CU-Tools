@@ -67,9 +67,11 @@ import uuid
 # Add parent directories to path for imports (cu-client should take precedence)
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "python"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "cu-client"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "cu-cli"))
 
 from content_understanding_client import AzureContentUnderstandingClient
 from dotenv import load_dotenv
+import cu_cli.operations as cu_ops
 
 # Try to import PyPDF2 for PDF protection detection
 try:
@@ -184,31 +186,17 @@ AGENTIC_PREVIEW_API_VERSION = "2026-06-01-preview"
 
 def resolve_api_version(api_version: Optional[str] = None) -> str:
     """Resolve an explicit API version without changing the GA default."""
-    resolved = api_version or os.getenv("CU_API_VERSION") or DEFAULT_API_VERSION
-    if not isinstance(resolved, str) or not resolved.strip():
-        raise ValueError("CU API version must be a non-empty string")
-    return resolved.strip()
+    return cu_ops.resolve_api_version(api_version)
 
 
 def get_client(api_version: str = None) -> AzureContentUnderstandingClient:
-    """Create CU client from environment variables."""
-    load_dotenv()
-    
-    endpoint = os.getenv("AZURE_AI_ENDPOINT")
-    api_key = os.getenv("AZURE_AI_API_KEY")
-    api_version = resolve_api_version(api_version)
-    
-    if not endpoint:
-        raise ValueError("AZURE_AI_ENDPOINT environment variable not set")
-    if not api_key:
-        raise ValueError("AZURE_AI_API_KEY environment variable not set")
-    
-    return AzureContentUnderstandingClient(
-        endpoint=endpoint,
-        api_version=api_version,
-        subscription_key=api_key,
-        x_ms_useragent="cu-issue-testing"
-    )
+    """Create CU client from environment variables (delegates to cu-cli)."""
+    try:
+        return cu_ops.get_client(
+            api_version=api_version, x_ms_useragent="cu-issue-testing"
+        )
+    except cu_ops.CUCliError as e:
+        raise ValueError(str(e)) from e
 
 
 def get_supported_files(input_path: Path, pattern: str = "*.*") -> List[Path]:
@@ -273,18 +261,10 @@ def run_analysis(
     timeout: int = 180,
     diagnostics: bool = False,
 ) -> Dict[str, Any]:
-    """Run analysis on a single file and return result."""
-    response = client.begin_analyze_binary(
-        analyzer_id,
-        str(file_path),
-        diagnostics=diagnostics,
+    """Run analysis on a single file and return result (delegates to cu-cli)."""
+    return cu_ops.analyze_file_and_wait(
+        client, analyzer_id, file_path, timeout=timeout, diagnostics=diagnostics
     )
-    result = client.poll_result(
-        response,
-        timeout_seconds=timeout,
-        diagnostics=diagnostics,
-    )
-    return result
 
 
 def run_layout_analysis(

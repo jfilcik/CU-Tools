@@ -135,6 +135,7 @@ Start with Tutorial 01 to explore the API, then follow 02 or 03 for the full age
 |------|---------|---------|
 | **cu-analyzer-run** | Run analysis or extract layout | `python tools/cu-analyzer-run/run.py` |
 | **create_and_test** | Create + validate + test (all-in-one) | `python tools/cu-analyzer-run/create_and_test.py` |
+| **[cu-cli](tools/cu-cli/README.md)** | Direct CLI/library for CU operations (create/analyze/classify/defaults); the operations layer other tools build on | `python -m cu_cli --help` (from `tools/cu-cli/`) |
 | **cu-analyzer-validate** | Check schema before creating | `python tools/cu-analyzer-validate/cu_analyzer_validator.py` |
 | **cu-results-export** | Convert results to CSV/Excel | `python tools/cu-results-export/export.py` |
 | **cu-cost-estimator** | Estimate and summarize CU processing costs | `python tools/cu-cost-estimator/cu_cost_estimator.py` |
@@ -151,6 +152,9 @@ Start with Tutorial 01 to explore the API, then follow 02 or 03 for the full age
 ```bash
 # Run all tests for cu-analyzer-run
 cd tools/cu-analyzer-run && python -m pytest tests/ -v
+
+# Run cu-cli tests (mocked unit tests + skipped-by-default live smoke test)
+cd tools/cu-cli && python -m pytest tests/ -v
 
 # Run export tests
 cd tools/cu-results-export && python -m pytest tests/ -v
@@ -185,6 +189,10 @@ CU-Tools/
 │   │   └── cu_analyzer_validator.py
 │   ├── cu-client/                     # Shared API client library
 │   │   └── content_understanding_client.py
+│   ├── cu-cli/                        # CU operations layer (CLI + library)
+│   │   ├── cu_cli/operations.py       # create/analyze/classify/delete + poll
+│   │   ├── cu_cli/cli.py              # python -m cu_cli entry point
+│   │   └── tests/
 │   ├── cu-results-export/             # Export JSON results to CSV/Excel
 │   │   ├── export.py
 │   │   └── tests/

@@ -89,11 +89,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Add parent directories to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "cu-client"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "cu-cli"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "cu-analyzer-validate"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "python"))
 
 from content_understanding_client import AzureContentUnderstandingClient
 from dotenv import load_dotenv
+import cu_cli.operations as cu_ops
 import os
 
 # Import validator
@@ -234,68 +236,41 @@ def create_analyzer(
     max_wait: int = 120
 ) -> dict:
     """
-    Create analyzer and wait for it to be ready.
-    
+    Create analyzer and wait for it to be ready (delegates to cu-cli).
+
     Returns:
         dict: Analyzer details once ready
     """
     print(f"\n{'='*60}")
     print(f"Creating analyzer: {analyzer_id}")
     print(f"{'='*60}")
-    
-    # Try to delete existing analyzer first (in case of retry)
+
+    def _on_progress(status: str, elapsed: int) -> None:
+        print(f"  Status: {status}... waiting ({elapsed}s)", end="\r")
+
     try:
-        client.delete_analyzer(analyzer_id)
-        print(f"  Deleted existing analyzer with same ID")
-        time.sleep(2)
-    except Exception:
-        pass  # Analyzer doesn't exist, that's fine
-    
-    # Create the analyzer
-    try:
-        response = client.begin_create_analyzer(analyzer_id, analyzer_template=schema)
-        print(f"  ✓ Create request accepted")
+        detail = cu_ops.create_analyzer_and_wait(
+            client, analyzer_id, schema, max_wait=max_wait, on_progress=_on_progress
+        )
+        print(f"  ✓ Analyzer ready!")
+        return detail
+    except cu_ops.CUCliError as e:
+        print(f"  ✗ {e}")
+        raise
     except Exception as e:
         print(f"  ✗ Failed to create analyzer: {e}")
         raise
-    
-    # Poll until analyzer is ready
-    print(f"  Waiting for analyzer to be ready (max {max_wait}s)...")
-    poll_interval = 3
-    elapsed = 0
-    
-    while elapsed < max_wait:
-        try:
-            detail = client.get_analyzer_detail_by_id(analyzer_id)
-            status = detail.get("status", "Unknown")
-            
-            if status.lower() in ("succeeded", "ready"):
-                print(f"  ✓ Analyzer ready! (took {elapsed}s)")
-                return detail
-            elif status.lower() == "failed":
-                error_detail = detail.get("error", detail)
-                raise Exception(f"Analyzer creation failed: {error_detail}")
-            else:
-                print(f"  Status: {status}... waiting ({elapsed}s)", end="\r")
-                time.sleep(poll_interval)
-                elapsed += poll_interval
-        except Exception as e:
-            if "failed" in str(e).lower():
-                raise
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-    
-    raise TimeoutError(f"Analyzer not ready after {max_wait} seconds")
 
 
 def delete_analyzer_safe(client: AzureContentUnderstandingClient, analyzer_id: str):
-    """Delete analyzer with error handling."""
-    try:
-        print(f"\nCleaning up analyzer: {analyzer_id}")
-        client.delete_analyzer(analyzer_id)
-        print(f"  ✓ Analyzer deleted")
-    except Exception as e:
+    """Delete analyzer with error handling (delegates to cu-cli)."""
+    print(f"\nCleaning up analyzer: {analyzer_id}")
+
+    def _on_error(e: Exception) -> None:
         print(f"  Warning: Failed to delete analyzer: {e}")
+
+    if cu_ops.delete_analyzer_safe(client, analyzer_id, on_error=_on_error):
+        print(f"  ✓ Analyzer deleted")
 
 
 def cleanup_analyzer_set(client: AzureContentUnderstandingClient, analyzer_ids: List[str]):

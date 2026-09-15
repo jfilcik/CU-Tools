@@ -292,6 +292,7 @@ If PyPDF2 is not installed, protection detection is skipped and files are proces
 - `cu-analyzer-validate` - Standalone schema validation (used automatically by `create_and_test.py`)
 - `cu-results-export` - Export results to CSV/Excel
 - `cu-client` - Python client library for CU API
+- `cu-cli` - Operations layer this tool delegates to for the actual create/analyze/delete calls against CU (`cu_cli.operations`)
 
 ## Related Skills
 

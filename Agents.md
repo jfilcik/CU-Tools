@@ -44,6 +44,9 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
 **Client Library**:
 - `tools/cu-client/`
   - `content_understanding_client.py` - Base CU API client (shared by all tools)
+- `tools/cu-cli/`
+  - `cu_cli/operations.py` - High-level, poll-aware CU operations (create-and-wait, analyze-and-wait, classify-and-wait, safe delete) built on `cu-client`. This is the single place actual CU service calls happen; `cu-analyzer-run` imports it instead of duplicating polling logic.
+  - `cu_cli/cli.py` - `python -m cu_cli` command-line interface exposing the same operations for direct/scripted use.
 
 **Supporting Tools**:
 - `tools/cu-reading-order-viz/`
@@ -725,6 +728,7 @@ python tools/cu-results-export/export.py --input results/ --output results.csv
 ### Tool Paths
 
 - **CU Client**: `tools/cu-client/content_understanding_client.py`
+- **CU CLI (operations layer)**: `tools/cu-cli/cu_cli/operations.py`, `tools/cu-cli/cu_cli/cli.py`
 - **Analyzer Run**: `tools/cu-analyzer-run/run.py`
 - **Create & Test**: `tools/cu-analyzer-run/create_and_test.py`
 - **Validator**: `tools/cu-analyzer-validate/cu_analyzer_validator.py`
