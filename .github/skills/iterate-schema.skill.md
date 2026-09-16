@@ -29,6 +29,21 @@ Schema iteration is the most common workflow after creating a v1 analyzer. This 
 - Test results from a previous run (JSON output directory)
 - Sample documents for re-testing
 
+## Workspace binding
+
+Follow [the v1 workspace guide](../../docs/iteration-workspaces.md).
+`{baseline_folder}` is a preserved prior iteration; `{iteration_folder}` is
+the selected next experiment. Keep customer work private. Record a hypothesis,
+baseline ID, defect IDs, exact changes, input/schema hashes, and versioned
+truth/evaluator before running. Store new schemas in `inputs/schemas/`, raw
+output in `outputs/raw/`, derived diagnostics in `outputs/evaluation/`, and
+the evidence/cost decision in `report.md`, all beneath `{iteration_folder}`.
+Do not export new files into a completed baseline. Changed hypotheses,
+configuration, datasets, or metrics require a new number; N stability repeats
+are trials within one numbered experiment.
+Link verified product bugs in the root and relevant iteration `bugs` arrays,
+separately from local defects; follow [tracking bugs](../../docs/iteration-workspaces.md#tracking-bugs).
+
 ## See Also
 
 - `eval-cu.skill.md` — Run evals to generate the results this skill analyzes
@@ -46,14 +61,14 @@ Export results and run field-level diagnostics:
 
 ```bash
 python tools/cu-results-export/export.py \
-  --input <test_results_dir> \
-  --output <test_results_dir>/results.csv \
+  --input "{baseline_folder}/outputs/raw/analysis" \
+  --output "{iteration_folder}/outputs/evaluation/baseline.csv" \
   --diagnose
 ```
 
 This produces:
-- `results.csv` — All extracted values in tabular form
-- `results.diagnosis.json` — Per-field metrics (fill rate, confidence, suggestions)
+- `baseline.csv` — All extracted values in tabular form
+- `baseline.diagnosis.json` — Per-field metrics (fill rate, confidence, suggestions)
 - Stdout diagnostic table with severity flags
 
 **What to look for:**
@@ -64,7 +79,9 @@ This produces:
 
 ### Step 2: Review Problem Fields
 
-For each flagged field, identify the root cause:
+For each flagged field, investigate a possible cause; these diagnostic
+patterns are hypotheses, not proof. Record cause status and confirm it only
+with linked isolation/reproduction evidence:
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
@@ -81,14 +98,13 @@ For each flagged field, identify the root cause:
 
 If a field has very low fill rate, verify the content exists in the document:
 
-```bash
-python tools/cu-analyzer-run/run.py \
-  --layout \
-  --input <sample_document> \
-  --output <output_dir>
+```powershell
+cu analyze "<sample_document>" --analyzer prebuilt-layout --out "{iteration_folder}\outputs\raw\layout"
 ```
 
-Check the `.layout.md` output to confirm:
+Use official `cu` for this routine call. If diagnostics depend on the legacy
+`.layout.md` format, retain `run.py --layout` and its bundle at the same
+iteration-local output path. Check the resulting markdown to confirm:
 - The target text exists in the OCR output
 - The text labels match what your description references
 - The document structure (tables, sections) is correctly identified
@@ -110,9 +126,9 @@ Apply the two-stage pipeline rules (see `Agents.md` §4.5):
 **Create a new schema version** (don't overwrite the previous one):
 
 ```
-schemas/
-├── my_analyzer_v1.json   ← keep for comparison
-├── my_analyzer_v2.json   ← improved version
+iterations/
+├── 001/inputs/schemas/my_analyzer_v1.json   ← preserved baseline
+└── 002/inputs/schemas/my_analyzer_v2.json   ← candidate snapshot
 ```
 
 ### Step 5: Re-Test with Comparison
@@ -121,16 +137,21 @@ Run the improved schema and compare against the previous version:
 
 ```bash
 python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/my_analyzer_v2.json \
-  --input <sample_documents> \
-  --output <test_results>/v2 \
-  --compare-with <test_results>/v1
+  --schema "{iteration_folder}/inputs/schemas/my_analyzer_v2.json" \
+  --input "<sample_documents>" \
+  --output "{iteration_folder}/outputs/raw/analysis" \
+  --compare-with "{baseline_folder}/outputs/raw/analysis"
 ```
 
 This generates:
-- New test results in `v2/`
+- New test results in the selected iteration's `outputs/raw/analysis/`
 - `comparison.md` — Field-by-field comparison with confidence deltas
 - Indicators: ✅ improved, ⚠️ degraded, 🔄 value changed
+
+Keep the integrated runner and its output bundle (it uses the legacy REST
+backend, not official CLI/SDK). Link generated comparison files; put any
+additional derived evaluation under `outputs/evaluation/`. Obtain cost
+approval before paid repeat/scale runs.
 
 ### Step 6: Evaluate Improvement
 
@@ -139,6 +160,11 @@ Review the comparison report:
 1. **Improved fields** (✅): Confirm the fix worked as expected
 2. **Degraded fields** (⚠️): Check if the change inadvertently affected other fields
 3. **Unchanged fields**: Verify they weren't affected by changes
+
+Verify against reviewed truth, not confidence deltas alone. Report denominators,
+raw sources, failures/retries, holdout scope, false accepts, review rate, and
+iteration cost/status/basis in the manifest/report. Missing cost is null, not
+zero; measured token usage times prices is still estimated cost.
 
 **Decision criteria:**
 - If critical fields improved and nothing degraded → **accept v2**
@@ -149,15 +175,20 @@ Review the comparison report:
 
 Once satisfied with field-level improvements, run a full eval:
 
+Expanding the corpus changes scope: create the next numbered experiment,
+bind `{iteration_folder}` to it, and select a baseline with matching scope.
+
 ```bash
 python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/my_analyzer_v2.json \
-  --input <full_corpus> \
-  --output <test_results>/v2_full \
-  --compare-with <test_results>/v1_full
+  --schema "{iteration_folder}/inputs/schemas/my_analyzer_v2.json" \
+  --input "<full_corpus>" \
+  --output "{iteration_folder}/outputs/raw/analysis" \
+  --compare-with "{baseline_folder}/outputs/raw/analysis"
 ```
 
 Then export and diagnose the full results to confirm improvements hold at scale.
+Complete `report.md`, refresh the root iteration index, and freeze finished
+evidence. Do not claim STP from global fill/confidence; use the workspace guide.
 
 ---
 
@@ -206,17 +237,22 @@ Then export and diagnose the full results to confirm improvements hold at scale.
 
 1. **Inspect the layout output for the failing region**:
    ```bash
-   python tools/cu-analyzer-run/run.py --layout --input <doc.pdf> --output diag_layout/
+   python tools/cu-analyzer-run/run.py --layout --input "<doc.pdf>" --output "{iteration_folder}/outputs/raw/diag_layout/"
    ```
-   Open `diag_layout/<doc>.layout.md`. If the failing fields' labels and values appear as plain text (no `<table>` wrapping) and labels are visually above values, reading order is likely broken.
+   Open the iteration-local `outputs/raw/diag_layout/<doc>.layout.md`. If the
+   failing labels and values lack table structure and are separated in text
+   order, investigate reading order as a possible cause.
 
 2. **Compare with `--read` (no layout)**:
    ```bash
-   python tools/cu-analyzer-run/run.py --read --input <doc.pdf> --output diag_read/
+   python tools/cu-analyzer-run/run.py --read --input "<doc.pdf>" --output "{iteration_folder}/outputs/raw/diag_read/"
    ```
    Note the token order. If labels appear far before values in the read stream, the same will be true in the layout token stream that the LLM consumes.
 
-3. **Verify with a flattened test schema**: Create a minimal flat schema (no nested arrays) targeting only the failing fields with explicit "directly below the label" descriptions. If the flat schema works, the original nested schema's complexity was a contributing factor.
+3. **Test a flattened schema hypothesis in a new numbered experiment**:
+   snapshot a minimal flat schema targeting the failing fields with
+   label-relative descriptions; compare repeated correctness evidence before
+   concluding that nesting contributed.
 
 **Mitigations** (in order of preference):
 

@@ -7,17 +7,25 @@ Two complementary tools for Content Understanding analysis:
 
 ## Quick Decision Guide
 
+**Use the official `cu` CLI first** for routine analyzer management, model
+defaults, layout extraction, single-file analysis, and ordinary concurrent
+batches. See the [root quick start](../../README.md#install-or-update-the-official-cu-cli)
+for installation and command examples. No CU-Tools wrapper is needed for those
+operations.
+
 **Use `create_and_test.py` when:**
-- ✅ You have a schema file to test
-- ✅ You're developing/iterating on a schema
-- ✅ You want automatic schema validation before creating analyzer
-- ✅ You want automatic cleanup (delete analyzer after testing)
+- You want integrated schema validation, creation, sample testing, and cleanup
+- You need classify-and-route dependency creation and cleanup
+- You need CU-Tools-compatible results for iterative evaluation
 
 **Use `run.py` when:**
-- ✅ You have an existing analyzer ID
-- ✅ You need layout extraction only (first step before schema development)
-- ✅ You're running production batch processing
-- ✅ You need fine-grained control over operations
+- You need repeated stability runs or scale evaluations with run metadata
+- You need diagnostic headers/usage summaries or protected-file handling
+- Your downstream reports expect CU-Tools JSON envelopes and output bundles
+
+Existing runner capabilities remain available; CLI output is not a drop-in
+replacement for a run bundle. The local `tools/cu-cli/cu_cli.operations`
+module still uses the legacy REST client, **not** the official CLI/SDK.
 
 ---
 
@@ -110,8 +118,12 @@ Set environment variables in `.env` at the repository root:
 ```
 AZURE_AI_ENDPOINT=https://your-resource.services.ai.azure.com/
 AZURE_AI_API_KEY=your-api-key
-CU_API_VERSION=2024-12-01-preview
+CU_API_VERSION=2025-11-01
 ```
+
+These settings are for the runners. The official CLI instead uses `CU_ENDPOINT`
+and `CU_API_KEY` or saved `cu config`; it does not load this `.env` automatically.
+Runner layout examples below remain useful when you need CU-Tools output.
 
 ```bash
 # MOST COMMON: Extract layout (first step before creating schema)
@@ -292,7 +304,8 @@ If PyPDF2 is not installed, protection detection is skipped and files are proces
 - `cu-analyzer-validate` - Standalone schema validation (used automatically by `create_and_test.py`)
 - `cu-results-export` - Export results to CSV/Excel
 - `cu-client` - Python client library for CU API
-- `cu-cli` - Operations layer this tool delegates to for the actual create/analyze/delete calls against CU (`cu_cli.operations`)
+- [Official CU CLI](https://github.com/Azure/content-understanding-toolkit/tree/main/cu-cli) - Preferred for routine service operations
+- [Local compatibility layer](../cu-cli/README.md) - Legacy REST operations used internally (`cu_cli.operations`); not the official package
 
 ## Related Skills
 

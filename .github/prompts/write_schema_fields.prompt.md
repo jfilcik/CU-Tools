@@ -6,9 +6,19 @@ Author or refine field descriptions, types, and examples for a Content Understan
 
 ## Context
 
+- **Case / Iteration**: [Selected `case/iterations/NNN`]
+- **Hypothesis / Baseline / Defects**: [Manifest hypothesis, prior iteration ID, defect IDs]
+- **Tracking bugs**: [Verified issue/iteration `bugs`, separate from defect IDs; follow the [contract](../../docs/iteration-workspaces.md#tracking-bugs)]
 - **Current Schema**: [Path to existing schema or "new schema"]
 - **Fields to Add/Modify**: [List of fields]
 - **Known Issues**: [Any current problems with field extraction]
+
+Use [the v1 workspace guide](../../docs/iteration-workspaces.md). Keep customer
+work private. Write candidate fields into the selected iteration's
+`inputs/schemas/` snapshot, never over a finished baseline. A changed schema
+or evaluation rule requires a new numbered experiment. Record exact changes
+and source evidence; examples must illustrate formats, not copy expected
+customer answers. Version/hash the final schema and evaluation inputs.
 
 ## Guidelines
 
@@ -109,6 +119,13 @@ Provide 2-3 canonical examples that show:
 ## Output Format
 
 Provide JSON snippet with complete field definitions:
+
+Link the resulting schema from the iteration manifest. Keep diagnostics and
+comparisons in `outputs/evaluation/` and conclusions in `report.md`. A proposed
+field change is not a measured improvement: after an authorized run, record
+correctness with denominators/sources, protected-field regressions,
+failures/retries, and per-iteration cost/basis. Leave unmeasured metrics empty
+and unknown cost null; do not infer STP from fill/confidence.
 
 ```json
 {

@@ -20,14 +20,14 @@ class TestGetClient:
         monkeypatch.delenv("AZURE_AI_API_KEY", raising=False)
         monkeypatch.setenv("AZURE_AI_API_KEY", "key")
         with pytest.raises(ops.CUCliError, match="AZURE_AI_ENDPOINT"):
-            ops.get_client()
+            ops.get_client(load_env=False)
 
     def test_get_client_missing_api_key_raises(self, monkeypatch):
         monkeypatch.delenv("AZURE_AI_ENDPOINT", raising=False)
         monkeypatch.delenv("AZURE_AI_API_KEY", raising=False)
         monkeypatch.setenv("AZURE_AI_ENDPOINT", "https://example.com")
         with pytest.raises(ops.CUCliError, match="AZURE_AI_API_KEY"):
-            ops.get_client()
+            ops.get_client(load_env=False)
 
     def test_get_client_explicit_args_override_env(self, mock_env_vars):
         client = ops.get_client(endpoint="https://explicit.example.com", api_key="explicit-key")

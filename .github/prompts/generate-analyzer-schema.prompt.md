@@ -12,9 +12,19 @@ Generate a complete, valid Content Understanding analyzer schema based on identi
 
 ## Context
 
+- **Case / Iteration**: [Selected `case/iterations/NNN`; private for customer data]
+- **Hypothesis / Baseline / Defects**: [One sentence, prior ID or none, defect IDs]
+- **Tracking bugs**: [Verified issue/iteration `bugs`, separate from defect IDs; follow the [contract](../../docs/iteration-workspaces.md#tracking-bugs)]
 - **Document Type**: [e.g., Invoice, Purchase Order, Contract]
 - **Base Analyzer**: [optional - e.g., prebuilt-invoice, prebuilt-document]
 - **Fields to Extract**: [list from document structure analysis]
+
+Follow [the v1 workspace guide](../../docs/iteration-workspaces.md).
+Generate the candidate in `{iteration_folder}/inputs/schemas/`, not a shared
+mutable schema directory. Preserve prior snapshots; a changed hypothesis,
+configuration, dataset, or metric starts a new numbered experiment. Record
+input/schema hashes and versioned evaluator/truth/acceptance criteria. Keep
+expected customer answers out of schema descriptions.
 
 ## Input
 
@@ -382,7 +392,8 @@ Follow this approach when improving analyzer accuracy:
    - Additional alternative labels
    - Clearer format expectations
    - Better disambiguation
-3. Test with same documents to verify improvement
+3. Test in the next numbered experiment with the same frozen comparison
+   documents; link the baseline, raw results, evaluation, and cost.
 
 ### 2. Add Training Examples (If Needed)
 
@@ -418,7 +429,7 @@ Generate complete JSON schema:
 **CRITICAL**: Always validate schemas before creating analyzers using the validation tool:
 
 ```bash
-python tools/cu-analyzer-validate/cu_analyzer_validator.py schemas/my_schema.json
+python tools/cu-analyzer-validate/cu_analyzer_validator.py "{iteration_folder}/inputs/schemas/my_schema.json"
 ```
 
 The validator checks for:
@@ -434,6 +445,12 @@ The validator checks for:
 
 **Integration**: The `create_and_test.py` tool automatically runs validation before creating analyzers.
 
+Use official `cu` for routine validation/create/analyze operations, retaining
+the local validator for CU-Tools quality/preview checks and runners for
+advanced lifecycle/repeat/diagnostic/bundle workflows. Runner raw output
+belongs under `{iteration_folder}/outputs/raw/`, evaluation under
+`outputs/evaluation/`. Do not claim the REST-based runners use official CLI/SDK.
+
 ## Validation Checklist
 
 Before finalizing the schema:
@@ -446,7 +463,8 @@ Before finalizing the schema:
 - [ ] Object fields have defined structure with `properties`
 - [ ] Description helps the model understand what to extract from OCR/layout results
 - [ ] Edge cases are addressed in descriptions
-- [ ] Run validation: `python tools/cu-analyzer-validate/cu_analyzer_validator.py schemas/my_schema.json`
+- [ ] Validate the iteration-local snapshot, with explicit preview API version when needed
+- [ ] Manifest/report link the schema, input hashes, baseline, evaluation plan, and cost status
 
 ## Example: Custom Invoice Schema
 
@@ -546,7 +564,13 @@ Before finalizing the schema:
 
 This prompt is used in **Step 4-5** of the `generate-analyzer.skill.md` workflow, after fields have been identified from document structure analysis.
 
-Save the generated schema to: `{project_folder}/schemas/{name}_v1.json`
+Save the generated schema to:
+`{iteration_folder}/inputs/schemas/{name}_v1.json`.
+Before execution, hash the final submitted snapshot. After execution, record
+exact sanitized commands, versions and run IDs, failures/retries, metric
+denominators/sources, and each iteration's cost basis in the manifest/report.
+Missing cost remains unknown/null. Refresh root navigation; no generated
+schema alone proves correctness or straight-through processing.
 
 ## Reference: Working Schema Examples
 

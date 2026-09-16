@@ -12,15 +12,27 @@ Analyze layout extraction results to understand document structure and identify 
 
 ## Context
 
-- **Layout Results Folder**: [Path to layout_results folder with .layout.md and .layout.json files]
+- **Case / Iteration**: [Selected case and `iterations/NNN`]
+- **Hypothesis / Baseline / Defects**: [Manifest hypothesis, prior iteration ID, defect IDs]
+- **Tracking bugs**: [Verified issue/iteration `bugs`, separate from defect IDs; follow the [contract](../../docs/iteration-workspaces.md#tracking-bugs)]
+- **Layout Results Folder**: [Selected iteration's `outputs/raw/layout`, or linked immutable prior evidence]
 - **Document Type**: [e.g., Invoice, Purchase Order, Contract, Receipt]
 - **Purpose**: [What the customer wants to extract/achieve]
 
 ## Input Files
 
+Follow [the v1 workspace guide](../../docs/iteration-workspaces.md). Inventory
+and hash selected documents; keep customer data private. Use official `cu`
+for routine layout analysis and preserve its actual output contract; retain
+the runner only when consumers require its `.layout.*` bundle. Do not rerun
+or relocate existing evidence merely to change the folder structure.
+
 Review the following files from the layout results:
 1. `*.layout.md` - Markdown representation of document content
 2. `*.layout.json` - Full layout analysis with structure details
+
+For official CLI results, inspect the corresponding `*.result.md` and
+`*.result.json` instead; do not rename them to imply runner compatibility.
 
 ## Analysis Tasks
 
@@ -75,6 +87,14 @@ Identify potential difficulties:
 ## Output Format
 
 Provide a structured summary:
+
+Save the derived summary under
+`{iteration_folder}/outputs/evaluation/document-structure.md`, link it from
+the iteration manifest and `report.md`, and cite source files/pages for each
+observation. Do not rewrite raw layout output. Clearly separate observed
+text/structure from suspected causes; visual appearance is not available to
+the field-extraction stage. Record any layout-call cost in the iteration;
+an offline review is not a new measured extraction result.
 
 ```markdown
 ## Document Structure Summary

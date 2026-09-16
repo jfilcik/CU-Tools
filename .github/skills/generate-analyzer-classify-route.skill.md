@@ -59,6 +59,24 @@ keywords found in OCR output), NOT visual appearance (colors, fonts, layout posi
 
 ## Workflow Steps
 
+### Select the case and numbered experiment
+
+Use [the v1 workspace guide](../../docs/iteration-workspaces.md).
+`{case_folder}` is the chosen public/private case; `{iteration_folder}` is
+its selected `iterations/NNN`. Never put customer evidence in public CU-Tools.
+Record the pipeline hypothesis, defect IDs, baseline, selected input hashes,
+and versioned truth/evaluator. Snapshot **all** inner and outer schemas in
+`inputs/schemas/`, including final resolved analyzer references.
+Link verified product bugs in the root and relevant iteration `bugs` arrays,
+separately from local defects; follow [tracking bugs](../../docs/iteration-workspaces.md#tracking-bugs).
+
+Predeclare inner-analyzer checks and full-packet evaluation as phases of the
+pipeline experiment. Save their raw bundles separately under `outputs/raw/`
+and exports under `outputs/evaluation/`. Changed hypotheses, configurations,
+datasets, or metrics start a new number; preserve completed evidence.
+Use official `cu` for simple calls, while retaining `create_and_test.py` for
+pipeline/lifecycle orchestration and its legacy REST-based result bundle.
+
 ### Step 1: Identify Document Types in the Packet
 
 **User Action**: Provide sample document packets and describe the document types present.
@@ -69,14 +87,13 @@ keywords found in OCR output), NOT visual appearance (colors, fonts, layout posi
 - Can a single packet have multiple pages of the same type?
 
 **Layout analysis across all types**:
-```bash
-python tools/cu-analyzer-run/run.py \
-  --layout \
-  --input {sample_folder} \
-  --output {project_folder}/layout_results
+```powershell
+cu analyze "{sample_folder}" --analyzer prebuilt-layout --out "{iteration_folder}\outputs\raw\layout"
 ```
 
-Review the `.layout.md` files to identify type-distinguishing text patterns:
+Review the markdown files to identify type-distinguishing text patterns
+(retain `run.py --layout` at this output path only if consumers need its
+`.layout.md`/bundle format):
 - What headings or titles uniquely identify each document type?
 - What labels or keywords appear only in one type?
 - Are there structured fields that appear in only one type?
@@ -115,11 +132,11 @@ For each document type, create a standard field-extraction schema following `gen
 }
 ```
 
-**Naming convention**: `{project_folder}/schemas/{type}_extractor_v1.json`
+**Naming convention**: `{iteration_folder}/inputs/schemas/{type}_extractor_v1.json`
 
 **Example for two types**:
 ```
-schemas/
+iterations/001/inputs/schemas/
 ├── invoice_extractor_v1.json      # Invoice fields
 └── receipt_extractor_v1.json      # Receipt fields
 ```
@@ -133,16 +150,16 @@ schemas/
 ```bash
 # Test invoice extractor
 python tools/cu-analyzer-run/create_and_test.py \
-  --schema {project_folder}/schemas/invoice_extractor_v1.json \
-  --input {project_folder}/samples/invoices/ \
-  --output {project_folder}/test_results/invoice_extractor_v1 \
+  --schema "{iteration_folder}/inputs/schemas/invoice_extractor_v1.json" \
+  --input "{case_folder}/inputs/documents/invoices/" \
+  --output "{iteration_folder}/outputs/raw/invoice_extractor" \
   --keep-analyzer
 
 # Test receipt extractor
 python tools/cu-analyzer-run/create_and_test.py \
-  --schema {project_folder}/schemas/receipt_extractor_v1.json \
-  --input {project_folder}/samples/receipts/ \
-  --output {project_folder}/test_results/receipt_extractor_v1 \
+  --schema "{iteration_folder}/inputs/schemas/receipt_extractor_v1.json" \
+  --input "{case_folder}/inputs/documents/receipts/" \
+  --output "{iteration_folder}/outputs/raw/receipt_extractor" \
   --keep-analyzer
 ```
 
@@ -152,7 +169,8 @@ python tools/cu-analyzer-run/create_and_test.py \
 
 **Success criteria before proceeding**:
 - Fill rate >80% for key fields in each inner analyzer
-- No obvious mis-extractions on the sample set
+- Reviewed critical-field correctness against truth (fill is only diagnostic)
+- Required cost approval and bounded run/retry plan recorded
 
 ---
 
@@ -160,12 +178,12 @@ python tools/cu-analyzer-run/create_and_test.py \
 
 ```bash
 python tools/cu-results-export/export.py \
-  --input {project_folder}/test_results/invoice_extractor_v1 \
-  --output {project_folder}/test_results/invoice_extractor_v1/results.csv
+  --input "{iteration_folder}/outputs/raw/invoice_extractor" \
+  --output "{iteration_folder}/outputs/evaluation/invoice_results.csv"
 
 python tools/cu-results-export/export.py \
-  --input {project_folder}/test_results/receipt_extractor_v1 \
-  --output {project_folder}/test_results/receipt_extractor_v1/results.csv
+  --input "{iteration_folder}/outputs/raw/receipt_extractor" \
+  --output "{iteration_folder}/outputs/evaluation/receipt_results.csv"
 ```
 
 Review the CSVs to confirm field extraction quality before proceeding.
@@ -211,7 +229,7 @@ with descriptions that tell GPT-4.1 how to tell document types apart.
 - ✅ Include what's unique to this type vs other types
 - ❌ No visual descriptions: no colors, fonts, layout positions
 
-**Save as**: `{project_folder}/schemas/{project}_classifier_v1.json`
+**Save as**: `{iteration_folder}/inputs/schemas/{project}_classifier_v1.json`
 
 **Replace the `analyzerId` placeholders** with the actual IDs captured in Step 3.
 
@@ -221,7 +239,7 @@ with descriptions that tell GPT-4.1 how to tell document types apart.
 
 ```bash
 python tools/cu-analyzer-validate/cu_analyzer_validator.py \
-  {project_folder}/schemas/{project}_classifier_v1.json
+  "{iteration_folder}/inputs/schemas/{project}_classifier_v1.json"
 ```
 
 The validator checks that `contentCategories` are properly formed and that `enableSegment` is set.
@@ -232,9 +250,9 @@ The validator checks that `contentCategories` are properly formed and that `enab
 
 ```bash
 python tools/cu-analyzer-run/create_and_test.py \
-  --schema {project_folder}/schemas/{project}_classifier_v1.json \
-  --input {project_folder}/samples/mixed_packets/ \
-  --output {project_folder}/test_results/classifier_v1 \
+  --schema "{iteration_folder}/inputs/schemas/{project}_classifier_v1.json" \
+  --input "{case_folder}/inputs/documents/mixed_packets/" \
+  --output "{iteration_folder}/outputs/raw/classifier" \
   --keep-analyzer
 ```
 
@@ -246,8 +264,8 @@ Use **mixed-document packets** (PDFs or batches containing multiple document typ
 
 ```bash
 python tools/cu-results-export/export.py \
-  --input {project_folder}/test_results/classifier_v1 \
-  --output {project_folder}/test_results/classifier_v1/results.csv
+  --input "{iteration_folder}/outputs/raw/classifier" \
+  --output "{iteration_folder}/outputs/evaluation/classifier_results.csv"
 ```
 
 The exported CSV will include a `category` column showing how each segment was classified.
@@ -256,10 +274,21 @@ The exported CSV will include a `category` column showing how each segment was c
 - **Classification accuracy**: Are segments classified into the correct category?
 - **Extraction quality**: Are fields from inner analyzers populated correctly?
 - **"other" rate**: High rate suggests unrecognized document types or poor category descriptions
+- **Case correctness/STP**: reviewed fields, row/segment retention, false accepts,
+  and review rate with packet/segment denominators and held-out scope
+
+Record raw evidence sources, all analyzer/run IDs and sanitized commands,
+tool/git/API/model versions, failures/retries, latency, usage, and per-iteration
+cost (including inner checks and routing calls). Price-based costs are
+estimated, missing costs unknown/null. Complete `report.md` and the iteration
+manifest, then refresh the root index. Category/fill rates alone are not STP.
 
 ---
 
 ### Step 9: Iterate
+
+Create the next numbered experiment with a baseline link before any change.
+Reuse immutable source documents; do not edit the previous schema snapshots.
 
 #### If classification is inaccurate:
 - Revise the `description` in `contentCategories` for the confused categories
@@ -313,32 +342,27 @@ Step 7: Testing full pipeline on mixed packets...
   Classified: 10/10 segments correctly ✓
   Extractions: title fields 100%, registration fields 90% ✓
 
-Results exported to test_results/classifier_v1/results.csv
+Results exported to <iteration>/outputs/evaluation/classifier_results.csv
 ```
+
+The dialogue is illustrative, not run evidence. Actual reports must link
+their measured metrics, denominators, raw sources, limitations, and cost.
 
 ---
 
 ## Output Artifacts
 
 ```
-Issues/{project}/
-├── samples/
-│   ├── titles/                         # Title-only samples (for inner analyzer testing)
-│   ├── registrations/                  # Registration-only samples
-│   └── mixed_packets/                  # Full packets (for classifier testing)
-├── layout_results/
-├── schemas/
-│   ├── title_extractor_v1.json         # Inner analyzer: titles
-│   ├── registration_extractor_v1.json  # Inner analyzer: registrations
-│   └── vehicle_docs_classifier_v1.json # Outer analyzer: classifier
-├── test_results/
-│   ├── title_extractor_v1/             # Individual type test results
-│   ├── registration_extractor_v1/      # Individual type test results
-│   └── classifier_v1/                  # Full pipeline test results
-│       ├── metadata.json
-│       ├── packet1.json
-│       └── results.csv
-└── reports/
+{case_folder}/
+├── manifest.json
+├── README.md
+├── inputs/documents/              # Or existing immutable samples/
+└── iterations/001/
+    ├── manifest.json
+    ├── inputs/schemas/            # All inner and outer snapshots
+    ├── outputs/raw/               # Layout, inner checks, full pipeline
+    ├── outputs/evaluation/        # Exports and reviewed comparisons
+    └── report.md
 ```
 
 ---
@@ -415,24 +439,24 @@ This skill is complete when:
 ## Quick Reference — Full Workflow
 
 ```bash
-# 1. Layout analysis on all sample types
-python tools/cu-analyzer-run/run.py --layout --input samples/ --output layout_results/
+# 1. Layout analysis on the frozen sample selection (official CLI)
+cu analyze "{sample_folder}" --analyzer prebuilt-layout --out "{iteration_folder}/outputs/raw/layout"
 
 # 2. Create + test inner analyzers (one per document type), keep them
 python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/type1_extractor_v1.json --input samples/type1/ \
-  --output test_results/type1 --keep-analyzer
+  --schema "{iteration_folder}/inputs/schemas/type1_extractor_v1.json" --input "{case_folder}/inputs/documents/type1/" \
+  --output "{iteration_folder}/outputs/raw/type1" --keep-analyzer
 
 python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/type2_extractor_v1.json --input samples/type2/ \
-  --output test_results/type2 --keep-analyzer
+  --schema "{iteration_folder}/inputs/schemas/type2_extractor_v1.json" --input "{case_folder}/inputs/documents/type2/" \
+  --output "{iteration_folder}/outputs/raw/type2" --keep-analyzer
 
 # 3. Update classifier schema with real inner analyzer IDs, then create + test
 python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/classifier_v1.json --input samples/mixed_packets/ \
-  --output test_results/classifier_v1
+  --schema "{iteration_folder}/inputs/schemas/classifier_v1.json" --input "{case_folder}/inputs/documents/mixed_packets/" \
+  --output "{iteration_folder}/outputs/raw/classifier"
 
 # 4. Export pipeline results (includes category column)
 python tools/cu-results-export/export.py \
-  --input test_results/classifier_v1 --output test_results/classifier_v1/results.csv
+  --input "{iteration_folder}/outputs/raw/classifier" --output "{iteration_folder}/outputs/evaluation/classifier_results.csv"
 ```

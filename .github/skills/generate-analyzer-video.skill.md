@@ -7,7 +7,7 @@ description: Creates and tests Azure AI Content Understanding video analyzers wi
 
 ## Quick Start
 Use this workflow for video analysis with accurate timestamps.
-1. Gather 3-5 representative video samples.
+1. Select a numbered case iteration and freeze 3-5 representative video samples.
 2. Run a single test to understand keyframe structure.
 3. Define fields using the keyframe-anchored timestamp pattern.
 4. Test on short videos first, then scale to longer content.
@@ -15,9 +15,32 @@ Use this workflow for video analysis with accurate timestamps.
 
 Core commands:
 ```bash
-python tools/cu-analyzer-run/create_and_test.py --schema {project_folder}/schemas/{name}_v1.json --input {sample_folder} --output {project_folder}/test_results/v1
-python tools/cu-results-export/export.py --input {project_folder}/test_results/v1 --output {project_folder}/test_results/v1/results.csv
+python tools/cu-analyzer-run/create_and_test.py --schema "{iteration_folder}/inputs/schemas/{name}_v1.json" --input "{sample_folder}" --output "{iteration_folder}/outputs/raw/analysis"
+python tools/cu-results-export/export.py --input "{iteration_folder}/outputs/raw/analysis" --output "{iteration_folder}/outputs/evaluation/results.csv"
 ```
+
+## Workspace and evidence
+
+Follow [the v1 workspace guide](../../docs/iteration-workspaces.md).
+`{iteration_folder}` is the selected `case/iterations/NNN`; customer videos
+and outputs stay private. Record hypothesis/baseline, defects, input/video and
+schema hashes, and versioned truth/evaluator. Raw responses stay in
+`outputs/raw/`; timestamp validation, post-processed derivatives, exports,
+and frame review belong in `outputs/evaluation/`. Never overwrite raw
+timestamps with snapped values; score raw and post-processed results separately.
+Link verified product bugs in the root and relevant iteration `bugs` arrays,
+separately from local defects; follow [tracking bugs](../../docs/iteration-workspaces.md#tracking-bugs).
+
+Use official `cu` for supported routine local-file calls; keep the integrated
+runner above for lifecycle/bundle compatibility. Large-video URL workflows
+remain advanced; do not pretend the official CLI supports legacy URL flags.
+The runners retain their REST backend. Record sanitized commands and
+tool/git/API/model/runtime IDs without SAS query strings or credentials.
+
+Short and long-video scopes, new schemas, post-processing rules, or new
+metrics require separate numbered experiments. Repeated trials remain within
+one experiment. Apply cost approval before scale/stability work and account
+for cost in every manifest/report, including failures/retries.
 
 > ⚠️ **Edge-case flag:** Videos > 20 MB (or unknown/mixed size) must use a SAS blob URL upload, not binary upload. Read **Edge Cases & Workarounds → Large videos (> 20 MB)** at the end of this skill *before* processing large files.
 
@@ -125,13 +148,13 @@ Use `type: "string"` for timestamp fields with the `hh:mm:ss.ms` format. This ma
 
 ```bash
 # Validate schema
-python tools/cu-analyzer-validate/cu_analyzer_validator.py {project_folder}/schemas/{name}_v1.json
+python tools/cu-analyzer-validate/cu_analyzer_validator.py "{iteration_folder}/inputs/schemas/{name}_v1.json"
 
 # Create analyzer and test on short videos first
 python tools/cu-analyzer-run/create_and_test.py \
-  --schema {project_folder}/schemas/{name}_v1.json \
-  --input {short_videos_folder} \
-  --output {project_folder}/test_results/v1
+  --schema "{iteration_folder}/inputs/schemas/{name}_v1.json" \
+  --input "{short_videos_folder}" \
+  --output "{iteration_folder}/outputs/raw/analysis"
 ```
 
 ### 4) Validate Timestamps
@@ -150,8 +173,9 @@ def parse_timestamp_to_ms(ts_str):
         return int(h)*3600000 + int(mn)*60000 + int(s)*1000 + ms
     return None
 
-# Load result
-with open("result.json") as f:
+# Select an actual raw result from this numbered experiment.
+raw_result_path = r"{iteration_folder}\outputs\raw\analysis\{actual_result_filename}"
+with open(raw_result_path) as f:
     result = json.load(f)
 
 contents = result["result"]["contents"]
@@ -177,6 +201,9 @@ for content in contents:
 - **Avg KF Delta**: Average distance from nearest keyframe in ms (target: <500ms)
 
 ### 5) Scale to Longer Videos
+
+Select the next numbered experiment for the longer-video corpus, freeze the
+selection, and record its baseline and cost plan before execution.
 
 #### Expected accuracy by video length
 
@@ -223,26 +250,30 @@ This handles:
 
 Generate an HTML report with actual video frames at each detected timestamp:
 
-```bash
-python Issues/LuciHub/validate_frames.py \
-  --results {project_folder}/test_results/v1 \
-  --output {project_folder}/test_results/v1/validation.html
-```
+If an authorized workspace already supplies a frame-review evaluator, record
+its version/hash and direct its report to
+`{iteration_folder}/outputs/evaluation/validation.html`. The legacy
+`Issues/LuciHub/validate_frames.py` reference is private-workspace tooling, not
+a prerequisite shipped with public examples. Link actual results only.
 
-This extracts the actual frame at each timestamp and displays it with the object label, making it easy to manually verify detection accuracy.
+Record timestamp metric denominators and raw evidence sources, detection
+correctness against reviewed keyframe content, failed/retried calls, latency,
+and cost in `report.md` and the manifest. Keyframe alignment alone does not
+prove detection correctness or STP. Usage times prices is an estimate; missing
+cost is unknown/null. Refresh the root iteration index after the decision.
 
 ## Output Structure
 ```
-Issues/{project}/
-├── samples/              # Video files
-├── schemas/
-│   └── {name}_v1.json    # Video analyzer schema
-├── test_results/
-│   └── v1/
-│       ├── *.json         # Raw CU results per video
-│       ├── results.csv    # Exported results
-│       └── validation.html # Visual frame validation
-└── reports/
+{case_folder}/
+├── manifest.json
+├── README.md
+├── inputs/documents/          # Videos or existing immutable samples/
+└── iterations/001/
+    ├── manifest.json
+    ├── inputs/schemas/
+    ├── outputs/raw/analysis/  # Untouched timestamps and run metadata
+    ├── outputs/evaluation/    # Exports, timestamp and frame validation
+    └── report.md
 ```
 
 ## Success Criteria
@@ -251,6 +282,8 @@ Issues/{project}/
 - Medium videos (2-5 min): 100% keyframe match, 0% exceeds
 - Long videos (>5 min): 100% keyframe match, 0% exceeds (object count may be lower)
 - Results exported and validated visually
+- Manifests/report link measured evidence, per-iteration cost, and limitations;
+  historical timestamp targets are not fabricated results for this run.
 
 ## Edge Cases & Workarounds
 
@@ -289,8 +322,8 @@ result = client.poll_result(resp, timeout_seconds=2400)
 ```python
 # List blobs under prefix via the container SAS, then call begin_analyze_url per blob.
 # Reference implementation: Issues/WaPo/analyze_videos.py
-#   --container-sas "https://<acct>.blob.core.windows.net/<container>?<sas>"
-#   --prefix "Test Videos/"
+# Use an authorized private workspace and secure credential input.
+# Never save the SAS value in command history, manifests, or reports.
 ```
 
 **Verified bounds:**

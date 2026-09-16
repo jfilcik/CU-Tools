@@ -29,29 +29,34 @@ For a new single-document analyzer, start with
 
 ## Workspace contract
 
+Use [the canonical v1 format](../../docs/iteration-workspaces.md) and
+[copyable template](../../examples/_TEMPLATE/), not a separate iteration
+layout. Select the case and next unused number before creating artifacts.
+
 ```text
-iterative-schema-improvement/
+case/
+|-- manifest.json
 |-- README.md
-|-- config/
-|   |-- corpus.json
-|   |-- acceptance-criteria.json
-|   `-- tracked-fields.json
-|-- baseline/manifest.json
-|-- iterations/
-|   `-- iteration-NNN/
-|       |-- manifest.json
-|       |-- hypothesis.md
-|       |-- schemas/
-|       |-- results/
-|       |-- analysis/
-|       `-- report.md
-`-- reports/
-    |-- experiments.md
-    `-- issues.md
+|-- inputs/documents/
+`-- iterations/
+    `-- 001/
+        |-- manifest.json
+        |-- inputs/
+        |   |-- schemas/
+        |   `-- ...             # Inventory, truth, evaluator and rules
+        |-- outputs/raw/
+        |-- outputs/evaluation/
+        `-- report.md
 ```
 
-The baseline manifest points to preserved evidence; it does not copy or mutate
-the baseline.
+The initial baseline is iteration `001`; candidates set `baseline_iteration`
+to a prior ID. Preserve existing shared samples/legacy evidence in place and
+link them with provenance rather than relabeling them as a new run. Snapshot
+and hash submitted schemas; inventory/hash every input and version evaluator,
+truth, and acceptance policy. Changes to hypothesis, configuration, dataset,
+or metrics start a new number. `--iterations N` is N trials within that number.
+Link verified product bugs in the root and relevant iteration `bugs` arrays,
+separately from local defects; follow [tracking bugs](../../docs/iteration-workspaces.md#tracking-bugs).
 
 ## Workflow
 
@@ -62,10 +67,13 @@ Record:
 - API version, model, region, analyzer schema, and exact command;
 - representative corpus and data classification;
 - reviewed expected outcomes kept outside schema prompts;
-- successful and failed run counts;
-- correctness, null, variant, array-row, segment, latency, and token metrics.
+- successful, failed, and retried attempt counts and source run IDs;
+- correctness, null, variant, array-row, segment, latency, and token metrics
+  with explicit denominators and evidence sources;
+- per-iteration cost status/amount/basis, including billable repeated trials.
 
-Use at least five repeated runs per document when the goal is consistency.
+When consistency is the goal, plan at least five repeated trials per document
+subject to explicit cost approval; do not launch a paid corpus automatically.
 
 ### 2. Define tracked behavior
 
@@ -75,10 +83,13 @@ Separate metrics into:
 2. **Stability**: population, distinct values, and array/segment count drift.
 3. **False positives**: semantically wrong fallback or cross-field leakage.
 4. **Coverage**: row, segment, and repeated-entity retention.
-5. **Efficiency**: latency and token use.
+5. **Efficiency**: latency, token use, and cost (estimated versus actual charges).
 6. **Diagnostics**: field source and confidence coverage.
 
 For repeated entities, evaluate each row or segment and the document aggregate.
+For STP claims, define eligible scope and a held-out evaluation of critical
+correctness, false accepts, review, failures, and business-rule gates. Field
+fill/confidence is not a proxy for case-level automatic correctness.
 
 ### 3. State one coherent hypothesis
 
@@ -122,7 +133,13 @@ explicitly. For classify-and-route:
 - run the routed packet and verify segment boundaries;
 - delete temporary analyzers after the run.
 
-Save the command, manifest, metadata, and raw JSON for every experiment.
+Use official `cu` for routine individual operations; keep `run.py` for repeat
+trials/diagnostics and `create_and_test.py` for lifecycle or routing
+orchestration. Those runners retain their legacy REST backend and bundle.
+Save exact sanitized commands, tool git/version, API/model, runtime IDs,
+metadata, and raw JSON under the selected iteration's `outputs/raw/`.
+Put derived comparisons/exports under `outputs/evaluation/`, never over raw
+baseline results.
 
 ### 6. Apply promotion gates
 
@@ -135,8 +152,9 @@ A candidate is promotable only when:
 - required row and segment coverage passes;
 - schema descriptions pass the anti-hard-coding review.
 
-Efficiency improvements cannot compensate for correctness regressions. Mark an
-incomplete or failed run invalid rather than scoring missing output as null.
+Efficiency improvements cannot compensate for correctness regressions. Failed
+documents fail closed for acceptance; mark incomplete comparison evidence
+inconclusive rather than treating absent output as a correct null value.
 
 ### 7. Design the next iteration
 
@@ -151,12 +169,17 @@ reached, then document the safest candidate and unresolved blockers.
 
 Maintain:
 
-- an experiment ledger with hypothesis, exact changes, run count, gate result,
-  lessons, next action, and links to raw evidence;
-- an issue ledger with expected behavior, baseline and iteration rates,
-  regression status, and detail links;
+- the root manifest's iteration index, refreshed from authoritative iteration
+  manifests (hypothesis, result summary, status, and path);
+- the root defect list with expected/actual behavior and evidence-backed
+  unknown/suspected/confirmed cause status;
 - a per-iteration report with schema links, machine-readable comparison, raw
-  results, runtime/tokens, and promotion decision.
+  results, runtime/tokens, cost status/basis, and promotion decision.
+
+Record every iteration's cost, including failures. Price-based calculations
+remain estimated; unknown costs are null, not zero. Optional `findings.md`
+may curate reusable lessons with source links and contradictions, never
+replace immutable inputs or raw evidence.
 
 ## Success criteria
 
@@ -165,3 +188,4 @@ Maintain:
 - Correctness and stability are measured across the full corpus.
 - Promotion decisions are deterministic and machine-readable.
 - Schema prompts remain generic as the corpus and template variation grow.
+- Each iteration's cost and limitations are visible; root navigation matches it.

@@ -2,6 +2,27 @@
 
 Build a document field extraction analyzer using the AI-assisted workflow. This tutorial walks through the full cycle: layout analysis → schema design → validation → testing → evaluation.
 
+## Numbered iteration navigation
+
+- [Case manifest](manifest.json)
+- [001 — Planned baseline](iterations/001/manifest.json)
+- [001 — Plan/report: not run](iterations/001/report.md)
+- [Canonical v1 workspace guide](../../docs/iteration-workspaces.md)
+
+Iteration `001` links the existing public `invoice.pdf` and `invoice_v1.json`
+with SHA-256 hashes. It has **not run**: there are no new API results,
+evaluation metrics, or cost measurements, and no STP claim. The receipt is
+not in this selected baseline. Snapshot the schema locally before execution.
+
+The walkthrough below retains its legacy paths for compatibility. For new
+numbered experiments, select an iteration first: schema snapshots go in
+`iterations/001/inputs/schemas/`, layout/analysis bundles in
+`iterations/001/outputs/raw/`, exports/evaluation in
+`iterations/001/outputs/evaluation/`, and the decision/cost in `report.md`.
+Keep existing shared samples and legacy evidence in place. Changing the
+hypothesis, configuration, dataset, or metrics starts `002` or the next
+number; ten stability trials remain within one numbered experiment.
+
 ## What You'll Learn
 
 - How Content Understanding's two-stage pipeline works (OCR → AI field extraction)

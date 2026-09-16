@@ -1,95 +1,66 @@
-# cu-cli
+# Local CU-Tools compatibility layer
 
-A unified command-line interface and Python operations layer for running
-**actual operations against the Azure AI Content Understanding (CU) service** —
-create/list/get/delete analyzers, analyze files/URLs, create/run classifiers,
-and manage model deployment defaults.
+**This directory is not the official Azure CU CLI.** For routine operations,
+install the official [`cu-cli` package](https://github.com/Azure/content-understanding-toolkit/tree/main/cu-cli)
+and call `cu` directly. See the [root quick start](../../README.md#install-or-update-the-official-cu-cli)
+for installation, updates, configuration, and command examples.
 
-`cu-cli` wraps the shared [`tools/cu-client`](../cu-client/README.md) HTTP
-client (`AzureContentUnderstandingClient`) with small, tested,
-poll-aware operations (`create_analyzer_and_wait`, `analyze_file_and_wait`,
-`delete_analyzer_safe`, ...). It is the single place in CU-Tools where CU
-service calls happen — other tools (`cu-analyzer-run`, `create_and_test.py`)
-import `cu_cli.operations` rather than re-implementing create/poll/delete
-logic themselves, while keeping their own responsibilities (schema
-validation, scale/stability test orchestration, comparison reports, CSV
-export, cost estimation, etc.) unchanged.
+## Why this directory remains
 
-## Install
+`cu-analyzer-run/run.py` and `create_and_test.py` import this directory's
+`cu_cli.operations` for create/analyze/classify/delete and polling. It wraps
+the legacy [`tools/cu-client`](../cu-client/README.md) REST client; it does
+**not** invoke the official CLI or use its SDK. Installing the official package
+does not change the runners' backend.
 
-```bash
-pip install -r requirements.txt
-cp ../../.env.sample ../../.env   # then fill in AZURE_AI_ENDPOINT / AZURE_AI_API_KEY
-```
+Retaining this layer preserves complex workflows: diagnostics, run metadata,
+scale/stability testing, and classify-and-route orchestration. Do not build
+new routine-operation wrappers here when `cu` already supports the operation.
+The legacy entry point is retained for existing callers, not recommended for
+new interactive use.
 
-## Use as a CLI
+## Avoid the package-name collision
 
-Run from this directory (so `cu_cli` is importable), or add this directory
-to `PYTHONPATH`:
+Both this directory and the official package use the Python name `cu_cli`.
+Use the official `cu` executable from the repository root or outside the repo.
+Do not add `tools/cu-cli` to `PYTHONPATH` or run the official CLI from this
+directory. In particular, `python -m cu_cli` here invokes the local wrapper,
+whose commands and flags differ from the official CLI.
 
-```bash
-# Validate connectivity/auth
-python -m cu_cli validate-setup --verbose
+The runners deliberately load this local package for compatibility. A future
+backend migration must preserve their diagnostics and result contracts; a
+package installation alone is not such a migration.
 
-# Analyzers
-python -m cu_cli analyzer list
-python -m cu_cli analyzer get --analyzer-id my-analyzer
-python -m cu_cli analyzer create --analyzer-id my-analyzer --schema ../../schemas/my_schema.json
-python -m cu_cli analyzer delete --analyzer-id my-analyzer
+## Configuration and results
 
-# Analyze
-python -m cu_cli analyze file --analyzer-id my-analyzer --input document.pdf --output result.json
-python -m cu_cli analyze url --analyzer-id my-analyzer --url https://example.com/doc.pdf
+The local layer loads `.env` and reads `AZURE_AI_ENDPOINT`,
+`AZURE_AI_API_KEY`, and `CU_API_VERSION`. The official CLI uses `CU_ENDPOINT`,
+`CU_API_KEY`, `CU_AUTH_MODE`, and saved configuration instead; it does not
+automatically load the repository `.env`.
 
-# Classify-and-route
-python -m cu_cli classifier create --classifier-id my-classifier --schema classifier_schema.json
-python -m cu_cli classify --classifier-id my-classifier --input packet.pdf
-
-# Model deployment defaults
-python -m cu_cli defaults get
-python -m cu_cli defaults set --model gpt-4.1=my-gpt41-deployment
-```
-
-Every command prints JSON to stdout (or writes it to `--output <file>`) and
-exits non-zero on failure, so it composes well in scripts and CI.
-
-## Use as a library
-
-```python
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path("tools/cu-cli")))
-from cu_cli import operations as cu_ops
-
-client = cu_ops.get_client()  # reads AZURE_AI_ENDPOINT / AZURE_AI_API_KEY / CU_API_VERSION
-detail = cu_ops.create_analyzer_and_wait(client, "my-analyzer", schema_dict)
-result = cu_ops.analyze_file_and_wait(client, "my-analyzer", Path("document.pdf"))
-cu_ops.delete_analyzer_safe(client, "my-analyzer")
-```
-
-## What moved here from other tools
-
-`tools/cu-analyzer-run/create_and_test.py` and `tools/cu-analyzer-run/run.py`
-now call into `cu_cli.operations` for the actual service interaction
-(create-analyzer-and-wait, analyze-and-wait, safe delete/cleanup) instead of
-duplicating polling loops against `AzureContentUnderstandingClient` directly.
-Everything else about those tools — schema validation, classify-and-route
-DAG resolution, parallel batch processing, comparison reports, token-usage
-extraction — is unchanged.
+Official CLI result files are not identical to CU-Tools result bundles. Keep
+using the runners for downstream evaluation/export expecting their envelopes,
+run metadata, and usage summaries.
 
 ## Tests
 
-```bash
-pip install pytest
-pytest tests/
+Run from the repository root with the CU-Tools dependencies and pytest installed:
+
+```powershell
+# Offline unit tests for the local layer, not the official CLI
+python -m pytest tools\cu-cli\tests -m "not integration" -v
+
+# Explicit live test run: incurs real CU usage
+python -m pytest tools\cu-cli\tests\test_integration_live.py -m integration -v
 ```
 
-- `tests/test_operations.py`, `tests/test_cli.py` — unit tests against a
-  mocked `AzureContentUnderstandingClient` (no network calls, run in CI).
-- `tests/test_integration_live.py` — end-to-end smoke test against a **live**
-  CU resource. Skipped automatically unless `AZURE_AI_ENDPOINT` and
-  `AZURE_AI_API_KEY` are set (see `requires_credentials` fixture). It
-  creates a throwaway `prebuilt-document`-based analyzer, analyzes a sample
-  file from `data/`, and deletes the analyzer — safe to run repeatedly, but
-  it does incur real CU usage.
+The live tests load the repository `.env` and skip when endpoint/key credentials
+are absent. When configured, they read defaults, list analyzers, and create a
+temporary analyzer, analyze the checked-in invoice sample, and attempt cleanup.
+Run them only against an intended test resource. Running the whole test
+directory without excluding `integration` also enables live tests when
+credentials are present.
+
+These tests cover the **legacy runner backend**. They do not demonstrate that
+CU-Tools delegates to the official CLI. For the official CLI's own tests and
+supported options, use the upstream toolkit documentation.

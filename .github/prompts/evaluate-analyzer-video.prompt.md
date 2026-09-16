@@ -10,6 +10,23 @@ Video-specific evaluation overlay for Content Understanding video analyzers. Use
 
 > **Core eval workflow**: See `evaluate-analyzer.prompt.md` for scale/stability eval patterns, KPIs, and report template. This prompt adds video-specific guidance.
 
+## Iteration binding
+
+Apply [the v1 workspace guide](../../docs/iteration-workspaces.md). Read actual
+raw results from the selected `{iteration_folder}/outputs/raw/`, not a shared
+`result.json`. Write timestamp metrics, frame review, and post-processed
+derivatives to `outputs/evaluation/`; link them in the manifest and `report.md`.
+Preserve verified issue/iteration `bugs` links separately from local defect IDs;
+follow [tracking bugs](../../docs/iteration-workspaces.md#tracking-bugs).
+Never replace original timestamps with snapped ones. Inventory/hash video
+and schema inputs, version evaluator/truth, and record metric denominators,
+raw sources, scope, latency, retries/failures, and cost/status/basis.
+
+Different video scope, evaluator/post-processing rules, or metrics require a
+new numbered experiment with a baseline link. `--iterations N` is repeated
+trials within it. Keep customer videos private, sanitize all credentials/SAS
+queries, and obtain paid-run approval. Missing cost is unknown/null, not zero.
+
 ## Video-Specific Eval Considerations
 
 ### Timestamp Validation (Critical for Video)
@@ -28,8 +45,9 @@ def parse_timestamp_to_ms(ts_str):
         return int(h)*3600000 + int(mn)*60000 + int(s)*1000 + ms
     return None
 
-# Load result and validate
-with open("result.json") as f:
+# Select an actual raw result from this numbered experiment.
+raw_result_path = r"{iteration_folder}\outputs\raw\analysis\{actual_result_filename}"
+with open(raw_result_path) as f:
     result = json.load(f)
 
 for content in result["result"]["contents"]:
@@ -59,6 +77,10 @@ for content in result["result"]["contents"]:
 | Exceeds % | Timestamps beyond video duration | 0% |
 | Avg KF Delta | Average distance from nearest keyframe (ms) | <500ms |
 | Object Count | Number of detected items per video | Use case dependent |
+
+State timestamp counts as denominators; keyframe alignment is not reviewed
+object/event correctness or STP evidence. Distinguish raw from post-processed
+metrics and report human-review/audit scope and held-out limitations.
 
 ### Expected Accuracy by Video Length
 

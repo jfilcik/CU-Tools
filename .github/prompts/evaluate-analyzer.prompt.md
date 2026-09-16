@@ -16,6 +16,25 @@ Core evaluation workflow for Content Understanding analyzers. Works for all moda
 
 Run systematic evals to measure quality, stability, and cost, then decide whether to accept changes or iterate on the schema.
 
+## Select a numbered experiment
+
+Follow [the canonical v1 workspace guide](../../docs/iteration-workspaces.md);
+use private workspaces for customer data. Bind `{iteration_folder}` to
+`case/iterations/NNN`, and `{output_folder}` to its `outputs/raw/analysis`.
+Record the hypothesis, baseline ID, defects/changes, input/schema hashes,
+versioned truth/evaluator, acceptance policy, and development/holdout scope.
+Do not overwrite completed experiments; changed hypothesis/configuration/
+dataset/metrics require a new number. `--iterations N` denotes trials inside
+one experiment, not N numbered experiments.
+Preserve verified issue/iteration `bugs` links separately from local defect IDs;
+follow [tracking bugs](../../docs/iteration-workspaces.md#tracking-bugs).
+
+Use official `cu` for simple calls; the commands below retain `run.py` for
+repeat trials, diagnostics, and evaluator-compatible CU-Tools bundles.
+The runner backend remains legacy REST, not the official CLI/SDK.
+Confirm the resource/configuration and obtain explicit cost approval for
+paid scale/stability work before execution.
+
 ## Eval Types
 
 ### Scale Eval (1×N)
@@ -35,13 +54,13 @@ Run systematic evals to measure quality, stability, and cost, then decide whethe
 # Run analyzer on many documents
 python tools/cu-analyzer-run/run.py \
   --analyzer-id {analyzer_id} \
-  --input {documents_folder} \
-  --output {output_folder}
+  --input "{documents_folder}" \
+  --output "{output_folder}"
 
 # Export results to CSV
 python tools/cu-results-export/export.py \
-  --input {output_folder} \
-  --output {output_folder}/results.csv
+  --input "{output_folder}" \
+  --output "{iteration_folder}/outputs/evaluation/results.csv"
 ```
 
 ### Stability Eval
@@ -49,22 +68,26 @@ python tools/cu-results-export/export.py \
 # Run same document 10 times
 python tools/cu-analyzer-run/run.py \
   --analyzer-id {analyzer_id} \
-  --input {document_path} \
+  --input "{document_path}" \
   --iterations 10 \
-  --output {output_folder}
+  --output "{output_folder}"
 
 # Export results to CSV
 python tools/cu-results-export/export.py \
-  --input {output_folder} \
-  --output {output_folder}/results.csv
+  --input "{output_folder}" \
+  --output "{iteration_folder}/outputs/evaluation/results.csv"
 ```
 
-### Cost Estimation (Optional)
+### Per-Iteration Cost Accounting (Required)
+
+Always record cost status/amount/currency/basis in the manifest, even when
+cost is unknown. Run an estimate only with available usage/pricing evidence.
+
 ```bash
-# From test results (usage-based - most accurate)
+# From test results (usage-based estimate, not measured charges)
 python tools/cu-cost-estimator/generate_cost_summary.py \
-  --input {output_folder} \
-  --output {output_folder}/cost_report.md
+  --input "{output_folder}" \
+  --output "{iteration_folder}/outputs/evaluation/cost_report.md"
 
 # Quick estimate for planning
 python tools/cu-cost-estimator/cu_cost_estimator.py estimate \
@@ -73,6 +96,11 @@ python tools/cu-cost-estimator/cu_cost_estimator.py estimate \
   --model gpt-4.1
 ```
 
+Include layout, analysis, repeat/retry, failed, and billable evaluator calls
+or state exclusions. Price-based calculations are `estimated`, attributable
+actual charges `measured`; missing usage/prices stay `unknown` with null
+amount, never zero. State the price source/date and cost denominators.
+
 ## Required Parameters
 
 | Parameter | Scale Eval (1×N) | Stability Eval (N×1) |
@@ -80,7 +108,7 @@ python tools/cu-cost-estimator/cu_cost_estimator.py estimate \
 | `--analyzer-id` | Required | Required |
 | `--input` | Folder with documents | Single document path |
 | `--iterations` | 1 (default) | 10 (recommended) |
-| `--output` | Required | Required |
+| `--output` | Selected iteration's `outputs/raw/analysis` | Same |
 
 ## What to Analyze
 
@@ -98,6 +126,9 @@ python tools/cu-cost-estimator/cu_cost_estimator.py estimate \
 
 ## KPIs to Track
 
+These diagnostic targets must be adapted to the modality and workload; they
+are not proof of correctness or production-readiness.
+
 | Metric | Description | Target |
 |--------|-------------|--------|
 | Fill Rate | % of documents where field is populated | >80% |
@@ -106,9 +137,15 @@ python tools/cu-cost-estimator/cu_cost_estimator.py estimate \
 | Latency (p95) | Processing time per document | <5s |
 | Cost per doc | Token usage and API costs | Budget-dependent |
 
+For acceptance, measure reviewed critical-field and business-case correctness
+with denominators/sources, protected-field regressions, failures, and held-out
+coverage. STP needs verified case-level automatic correctness, false accepts,
+human review, eligible scope, and audit limitations, not global fill/confidence.
+
 ## Report Template
 
-After exporting results, create a summary at `{output_folder}/REPORT.md`:
+After exporting results, create `{iteration_folder}/report.md`, update its
+manifest, and synchronize the root iteration index:
 
 ```markdown
 # Eval Report: {analyzer_id}
@@ -117,6 +154,13 @@ After exporting results, create a summary at `{output_folder}/REPORT.md`:
 **Eval Type**: {scale|stability}
 **Date**: {timestamp}
 
+## Hypothesis, Inputs, and Execution
+
+Hypothesis/baseline/defect IDs/changes: {manifest}
+Input inventory/schema hashes, truth/evaluator versions: {links}
+Scope, holdout counts, acceptance and review policy: {definitions}
+Exact sanitized commands, working directory, tool/git/API/model, runtime IDs: {evidence}
+
 ## Summary
 
 | Metric | Value |
@@ -124,8 +168,15 @@ After exporting results, create a summary at `{output_folder}/REPORT.md`:
 | Documents Processed | {count} |
 | Successful | {success_count} |
 | Failed | {fail_count} |
+| Retried Attempts | {retry_count} |
+| Repeated Trials | {trial_count} |
 
-## Fill Rates (Coverage)
+## Reviewed Correctness and Acceptance
+
+{metrics with units, denominators, calculation rules, and raw/evaluator sources}
+{critical behavior, false accepts, review, failures, holdout and audit limits}
+
+## Fill Rates and Confidence (Diagnostics)
 
 | Field | Fill Rate | Confidence (p50) | Notes |
 |-------|-----------|------------------|-------|
@@ -138,33 +189,43 @@ After exporting results, create a summary at `{output_folder}/REPORT.md`:
 ## Recommendations
 
 {schema improvements — propose specific field description changes}
+
+## Cost, Limitations, and Decision
+
+{cost status, amount or null, USD, source/pricing basis, coverage/exclusions}
+{accept/reject/inconclusive; protected behavior, limitations, next hypothesis}
+
+## Evidence
+
+{links to manifest, actual raw results, execution metadata, exports/evaluation}
 ```
 
 ## Eval-Driven Improvement Loop
 
 When evaluating, follow this pattern:
-1. Read the eval manifest (if exists) or use defaults
+1. Read/create the selected iteration manifest and predeclare acceptance rules
 2. Run the appropriate eval (scale or stability)
 3. Export results and generate report
 4. If metrics are below targets, produce an actionable diff plan:
    - Identify specific fields that need improvement
    - Propose concrete description changes
-   - Quantify expected KPI deltas
+   - State proposed KPI deltas as hypotheses, not measured outcomes
    - Cite exemplar documents showing the issue
-5. Optionally estimate costs for production deployment
+5. Record this iteration's cost, limitations, and evidence-backed decision;
+   optionally project production cost with explicit assumptions
+6. Start the next numbered experiment for any changed configuration, data, or
+   metric; keep completed evidence and raw results immutable
 
 ## Output Files
 
 ```
-{output_folder}/
-├── metadata.json           # Run configuration and summary
-├── results/
-│   ├── {document}.json     # Result for each document
-│   └── {document}_iter002.json  # (stability eval iterations)
-├── results.csv             # Exported analysis table
-├── results.summary.json    # Fill rates and statistics
-├── cost_report.md          # Cost estimate (if generated)
-└── REPORT.md               # Summary report
+{iteration_folder}/
+├── manifest.json
+├── inputs/                  # Schema snapshots, inventory, truth/evaluator
+├── outputs/
+│   ├── raw/analysis/        # Unchanged runner bundle and attempt metadata
+│   └── evaluation/          # Exports, comparisons, cost evidence
+└── report.md
 ```
 
 ## See Also

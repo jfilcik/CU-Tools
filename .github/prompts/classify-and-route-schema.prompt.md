@@ -10,6 +10,18 @@ Design classify-and-route analyzer pipelines that classify documents/videos into
 
 > **Full workflow guide**: See `.github/skills/generate-analyzer-classify-route.skill.md` for the complete step-by-step process. This prompt covers schema design rules and patterns.
 
+## Iteration binding
+
+Follow [the v1 workspace guide](../../docs/iteration-workspaces.md).
+Select `{iteration_folder}` (`case/iterations/NNN`) before generating schemas.
+Record a pipeline hypothesis, baseline, defect IDs, and exact changes. Keep
+customer packets private; inventory/hash inputs and version truth/evaluator.
+Snapshot and hash all final inner/outer schemas and resolved references.
+Preserve verified issue/iteration `bugs` links separately from local defect IDs;
+follow [tracking bugs](../../docs/iteration-workspaces.md#tracking-bugs).
+New configuration, dataset, hypothesis, or metric changes require a new
+number; preserve finished evidence.
+
 ## When to Use Classify-and-Route
 
 - Document packets contain **multiple distinct document types** (e.g., titles + registrations)
@@ -118,10 +130,10 @@ Category descriptions follow the same two-stage pipeline rule as field descripti
 
 ## Schema Organization
 
-Put all schemas for a pipeline in the **same directory**:
+Put all schemas for a pipeline in the **same iteration-local directory**:
 
 ```
-schemas/classify_route/
+{iteration_folder}/inputs/schemas/
 ├── doc_classifier.json        # Outer (root) — has contentCategories
 ├── invoice_extractor.json     # Inner (leaf) — has fieldSchema
 ├── receipt_extractor.json     # Inner (leaf) — has fieldSchema
@@ -135,9 +147,9 @@ schemas/classify_route/
 ```bash
 # Test each inner analyzer individually
 python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/classify_route/invoice_extractor.json \
-  --input samples/invoices/ \
-  --output test_results/invoice_v1 \
+  --schema "{iteration_folder}/inputs/schemas/invoice_extractor.json" \
+  --input "{case_folder}/inputs/documents/invoices/" \
+  --output "{iteration_folder}/outputs/raw/invoice" \
   --keep-analyzer
 ```
 
@@ -146,18 +158,17 @@ python tools/cu-analyzer-run/create_and_test.py \
 ```bash
 # Using --inner-schema for explicit mapping
 python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/classify_route/doc_classifier.json \
-  --inner-schema invoice=schemas/classify_route/invoice_extractor.json \
-  --inner-schema receipt=schemas/classify_route/receipt_extractor.json \
-  --input samples/mixed_packets/ \
-  --output test_results/classify_route_v1
-
-# Future: auto-discovery from directory
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema-dir schemas/classify_route/ \
-  --input samples/mixed_packets/ \
-  --output test_results/classify_route_v1
+  --schema "{iteration_folder}/inputs/schemas/doc_classifier.json" \
+  --inner-schema "invoice={iteration_folder}/inputs/schemas/invoice_extractor.json" \
+  --inner-schema "receipt={iteration_folder}/inputs/schemas/receipt_extractor.json" \
+  --input "{case_folder}/inputs/documents/mixed_packets/" \
+  --output "{iteration_folder}/outputs/raw/classifier"
 ```
+
+Keep this existing runner for dependency/lifecycle orchestration and its
+REST-based run bundle; use official `cu` for routine individual operations.
+Do not assume unimplemented auto-discovery flags. Predeclare the inner/full
+pipeline phases, obtain cost approval, and keep shared samples immutable.
 
 ### What to check in results
 
@@ -165,6 +176,15 @@ python tools/cu-analyzer-run/create_and_test.py \
 - **"other" rate**: High rate suggests missing categories or weak descriptions
 - **Extraction quality per category**: Check fill rates for each inner analyzer's fields
 - **Segment boundaries**: Are multi-page documents split at the right pages?
+- **Case acceptance**: reviewed critical-field correctness, row/segment
+  retention, false accepts, review rate, failures, and held-out scope
+
+Save exports/comparisons in `{iteration_folder}/outputs/evaluation/`.
+Complete `report.md` and manifest with sanitized commands, tool/git/API/model
+versions, all analyzer/run IDs, metric denominators/sources, retries/failures,
+and cost for the entire experiment (including inner checks). Price-based cost
+is estimated; missing cost is unknown/null, not zero. Refresh root navigation.
+Classification/fill scores alone do not establish STP.
 
 ## Common Patterns
 
@@ -203,6 +223,6 @@ See `Issues/Arch/schemas/arch_segmentation_v1.json` for a production example wit
 ## See Also
 
 - Full workflow: `.github/skills/generate-analyzer-classify-route.skill.md`
-- Example schemas: `Issues/_TEMPLATE/schemas/classify_route_example/`
+- Generic case template: [examples/_TEMPLATE](../../examples/_TEMPLATE/)
 - Core eval: `.github/prompts/evaluate-analyzer.prompt.md`
 - Field descriptions: `.github/prompts/write_schema_fields.prompt.md`

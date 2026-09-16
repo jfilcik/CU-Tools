@@ -44,6 +44,8 @@ def mock_env_vars(monkeypatch):
 
 
 def has_azure_credentials() -> bool:
+    from dotenv import load_dotenv
+    load_dotenv()
     return bool(os.environ.get("AZURE_AI_ENDPOINT") and os.environ.get("AZURE_AI_API_KEY"))
 
 

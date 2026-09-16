@@ -25,6 +25,7 @@ REPO_ROOT = Path(__file__).parent.parent.parent.parent
 DATA_FOLDER = REPO_ROOT / "data"
 
 SAMPLE_CANDIDATES = [
+    REPO_ROOT / "examples" / "02-Invoice-Extraction" / "samples" / "invoice.pdf",
     DATA_FOLDER / "invoice.pdf",
     DATA_FOLDER / "receipt.png",
     DATA_FOLDER / "pieChart.jpg",
@@ -51,7 +52,7 @@ class TestLiveSmoke:
             pytest.skip("No sample document available in data/ for a live analyze call")
 
         client = ops.get_client()
-        analyzer_id = f"cu-cli-smoke-{uuid.uuid4().hex[:8]}"
+        analyzer_id = f"cu_cli_smoke_{uuid.uuid4().hex[:8]}"
         schema = {
             "description": "cu-cli live smoke test analyzer (safe to delete)",
             "baseAnalyzerId": "prebuilt-document",

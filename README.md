@@ -3,7 +3,41 @@
 
 # CU-Tools
 
-A toolkit for building, testing, and evaluating Azure AI Content Understanding analyzers — from quick API exploration to eval-driven development with coding agents.
+A toolkit for turning customer reproductions into evidence-based Azure AI
+Content Understanding analyzer improvements — evaluating quality and cost at
+each iteration, toward safe straight-through processing.
+
+**Start with the official [CU CLI](https://github.com/Azure/content-understanding-toolkit/tree/main/cu-cli).**
+Use `cu` directly for routine CU operations. Add CU-Tools for repeated testing,
+usage diagnostics, evaluation, and CSV/Excel reports. You do not need to clone
+this repository just to use CU.
+
+## From reproduction to a supported decision
+
+1. **Describe the problem:** expected versus actual behavior, impact, defects,
+   and measurable goals.
+2. **Establish a baseline:** freeze document/schema inputs and version the
+   evaluator, reviewed truth, and acceptance criteria.
+3. **Run numbered experiments:** `001`, `002`, ... each preserve a hypothesis,
+   exact execution details, raw output, derived evaluation, and report links.
+4. **Account for every iteration's cost:** distinguish estimated from measured
+   charges; missing cost stays unknown, never zero.
+5. **Promote only with evidence:** compare correctness, regressions, review
+   rate, false accepts, holdout coverage, latency, and cost. Field fill and
+   confidence alone do not demonstrate straight-through processing.
+
+Start from [examples/_TEMPLATE](examples/_TEMPLATE/) and the
+[canonical v1 iteration-workspace guide](docs/iteration-workspaces.md).
+Each case has a root `manifest.json`; every numbered iteration has its own
+manifest, schema/input snapshots or immutable input references, raw output,
+evaluation, and `report.md`. Repeated trials (`--iterations 10`) belong inside
+one experiment, not ten numbered iterations.
+
+**Public library, private cases:** keep reusable examples and generic tools
+here; keep customer repros/data in a restricted workspace outside public
+CU-Tools. The template can be copied manually without a customer repository
+or browser. Existing examples and legacy run bundles remain usable; do not
+move or overwrite their evidence when adding iteration navigation.
 
 ---
 
@@ -29,32 +63,171 @@ Each stage leverages modality-specific processing before your custom schema fiel
 ### Prerequisites
 
 - **Microsoft Foundry** with Content Understanding enabled ([Setup Guide](docs/create_azure_ai_service.md))
-- **Python 3.9+** (for Python tools)
-- **VS Code** with REST Client extension (for `.http` files)
+- **Python 3.10+** (required by the official CLI)
+- **Azure CLI** (`az`) for Entra ID sign-in; alternatively use an API key
+- **VS Code** with REST Client extension only if using `.http` files
 
-### Setup
+### Install or update the official CU CLI
 
-```bash
-# Clone repository
-git clone https://github.com/jfilcik/CU-Tools.git
-cd CU-Tools
+Use a virtual environment to avoid conflicts with system Python. In
+**PowerShell**, starting in a directory of your choice:
 
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Configure Azure credentials
-cp .env.sample .env
-# Edit .env with your Azure AI endpoint and API key
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade --pre cu-cli
+cu --version
+cu --help
 ```
+
+On macOS/Linux, activate with `source .venv/bin/activate` instead. On macOS,
+use `cu-cli` in place of `cu` to avoid the built-in UUCP command.
+If PowerShell activation is blocked, use `.\.venv\Scripts\python.exe` and
+`.\.venv\Scripts\cu.exe` directly; no execution-policy change is needed.
+
+**Updates:** rerun `python -m pip install --upgrade --pre cu-cli` in the same
+environment. As of September 15, 2026, PyPI's latest release is `0.1.0b3`;
+`--pre` opts into preview releases, including newer betas. For stable-only
+updates once stable releases are available, omit `--pre`.
+`cu upgrade --check` checks PyPI without installing; `cu upgrade` offers an
+interactive upgrade, but use the explicit pip command for the preview channel.
+
+No toolkit source checkout or CU-Tools dependencies are needed for this path.
+For reproducible automation, pin a tested version instead of upgrading on
+every run.
+
+<details>
+<summary>Developer option: use the local toolkit checkout instead of PyPI</summary>
+
+For the checkout at `C:\src\cu-cli` (the package is in its `cu-cli` subdirectory):
+
+```powershell
+python -m pip install -e C:\src\cu-cli\cu-cli
+cu --version
+
+# Update deliberately; --ff-only will not merge diverged branches
+git -C C:\src\cu-cli pull --ff-only
+python -m pip install -e C:\src\cu-cli\cu-cli
+```
+
+An editable installation follows that checkout, not the latest PyPI release.
+Do not use `cu upgrade` to update the checkout. To switch back to PyPI, use
+a fresh virtual environment and the release-install command above.
+
+</details>
+
+### Configure an existing CU resource
+
+Entra ID avoids putting API keys in command history:
+
+```powershell
+az login
+cu config set endpoint https://YOUR-RESOURCE.services.ai.azure.com/
+cu config set auth entra
+cu config set api_version 2025-11-01
+cu doctor
+```
+
+Your identity must have access to the resource. For API-key authentication,
+provide `CU_ENDPOINT` and `CU_API_KEY` through your shell or secret manager.
+Do not pass secrets as `--api-key` arguments or commit them to files.
+Environment variables override saved configuration; clear stale
+`CU_API_KEY`/`CU_AUTH_MODE` values when switching to Entra ID.
+
+`cu doctor` checks an existing setup; it does not provision resources or deploy
+models. For a new resource, follow the
+[official setup guide](https://github.com/Azure/content-understanding-toolkit/blob/main/cu-cli/README.md#2-setup).
+
+### Add CU-Tools for advanced workflows
+
+Clone this repository only when you need its testing and reporting tools.
+Keep using your activated environment:
+
+```powershell
+git clone https://github.com/jfilcik/CU-Tools.git
+Set-Location CU-Tools
+python -m pip install -r requirements.txt
+Copy-Item .env.sample .env
+# Edit .env locally with AZURE_AI_ENDPOINT and AZURE_AI_API_KEY
+```
+
+The official CLI uses `CU_*` environment variables or its saved config.
+Existing Python runners load the repository `.env` and use
+`AZURE_AI_ENDPOINT` / `AZURE_AI_API_KEY`; they do not read `cu config`.
+Conversely, `cu` does not automatically load this repository's `.env`.
+Both support `CU_API_VERSION`. If the legacy variables are already in your
+shell, reuse them without copying keys into commands:
+
+```powershell
+$env:CU_ENDPOINT = $env:AZURE_AI_ENDPOINT
+$env:CU_API_KEY = $env:AZURE_AI_API_KEY
+```
+
+Installing `requirements.txt` does not install or upgrade the official CLI.
+Keep its installation explicit so users can choose release or source.
 
 ---
 
 
-## 🎯 Two Ways to Work
+## Choose the simplest tool
 
-### 1. Copilot AI-Assisted Path (Recommended)
+| Task | Use |
+|------|-----|
+| Check connectivity, inspect/create/delete an analyzer, update model defaults | Official `cu` |
+| Extract layout, analyze a file, or process a folder concurrently | Official `cu analyze` |
+| Repeat a document N times, capture CU diagnostics, or preserve CU-Tools run metadata/results | `tools/cu-analyzer-run/run.py` |
+| Validate + create + test + clean up, or orchestrate classify-and-route dependencies | `tools/cu-analyzer-run/create_and_test.py` |
+| Evaluate results, export CSV/Excel, inspect costs or prompt-cache telemetry | CU-Tools reporting/evaluation tools |
 
-Use the built-in Copilot skills for a guided, eval-driven workflow. This path combines AI-powered schema generation, validation, and systematic testing using the Python tools:
+### 1. Routine operations: call `cu` directly
+
+Run from the repository root (or outside the repo), not from `tools/cu-cli`:
+
+```powershell
+cu doctor
+cu analyzer list
+cu analyzer show prebuilt-layout
+
+# Local validation and creation; use your own schema file
+cu analyzer validate .\schemas\my_analyzer_v1.json --api-version 2025-11-01
+cu analyzer create --id my_analyzer_v1 --schema .\schemas\my_analyzer_v1.json --api-version 2025-11-01
+
+# Layout from a checked-in sample; custom field extraction
+cu analyze .\examples\02-Invoice-Extraction\samples\invoice.pdf --analyzer prebuilt-layout --out .\layout
+cu analyze .\examples\02-Invoice-Extraction\samples\invoice.pdf --analyzer my_analyzer_v1 --output json --out .\cli_results
+
+# Ordinary batches do not require run.py
+cu analyze .\samples --analyzer my_analyzer_v1 --output json --out .\cli_results --concurrency 3 --skip-existing
+
+# Inspect resource-wide defaults; apply only the mapping requested
+cu defaults get
+cu defaults set --no-from-config --model gpt-4.1=YOUR-EXISTING-DEPLOYMENT
+
+# Destructive: run only when you intend to remove this analyzer
+cu analyzer delete my_analyzer_v1
+```
+
+These are examples, not a script to run wholesale. Analysis incurs CU charges.
+`--skip-existing` preserves outputs; `--force` re-analyzes and bills again.
+Defaults affect the entire resource; avoid `--replace` unless replacing the
+whole mapping is intentional.
+
+**Analyzer updates:** CU does not support in-place replacement. Prefer
+creating `my_analyzer_v2`, testing it, and updating consumers. Only delete and
+recreate the same ID when explicitly intended; that causes an availability gap.
+Custom IDs use letters, digits, and underscores, not hyphens.
+
+**Output compatibility:** CLI `*.result.json` / `*.result.md` outputs are not
+the CU-Tools run bundle (`metadata.json`, result envelope, usage summaries).
+Keep `run.py` when downstream evaluation/export depends on that bundle or on
+diagnostic headers. The installed CLI currently supports local files, not URL
+inputs; do not assume every legacy wrapper option exists in `cu`.
+
+### 2. Advanced workflows and Copilot assistance
+
+Use the built-in Copilot skills for guided, eval-driven workflows. Use `cu`
+for simple individual operations, while keeping the Python runners when the
+workflow needs their orchestration or result format.
 
 #### Common Copilot Skills
 
@@ -76,31 +249,26 @@ Use the built-in Copilot skills for a guided, eval-driven workflow. This path co
 
 #### Python Tools (used by Copilot and for manual runs)
 
-```bash
-# Extract layout to understand document structure
-python tools/cu-analyzer-run/run.py --layout --input samples/ --output layout/
+```powershell
+# Repeated testing with diagnostic infos and CU-Tools results
+python tools\cu-analyzer-run\run.py --analyzer-id my_analyzer_v1 --input .\samples\invoice.pdf --output .\test_results --iterations 10 --max-workers 3 --diagnostics
 
-# Validate a schema
-python tools/cu-analyzer-validate/cu_analyzer_validator.py schemas/my_schema.json
+# CU-Tools-specific schema quality checks
+python tools\cu-analyzer-validate\cu_analyzer_validator.py .\schemas\my_schema.json
 
 # Create analyzer and test
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/my_schema.json \
-  --input samples/ \
-  --output test_results/
+python tools\cu-analyzer-run\create_and_test.py --schema .\schemas\my_schema.json --input .\samples --output .\test_results\v2
 
-# Export results to CSV
-python tools/cu-results-export/export.py --input test_results/ --output results.csv
+# Export the runner's results to CSV
+python tools\cu-results-export\export.py --input .\test_results\v2 --output .\results.csv
 
 # Estimate cost from actual CU usage
-python tools/cu-cost-estimator/cu_cost_estimator.py estimate-usage \
-  --cu-output test_results/sample.json \
-  --model gpt-4.1-mini
+python tools\cu-cost-estimator\cu_cost_estimator.py estimate-usage --cu-output .\test_results\sample.json --model gpt-4.1-mini
 ```
 
 ---
 
-### 2. HTTP REST Client (Quick Exploration)
+### 3. HTTP REST Client (optional exploration)
 
 Use the `.http` files for direct API exploration in VS Code:
 
@@ -133,9 +301,10 @@ Start with Tutorial 01 to explore the API, then follow 02 or 03 for the full age
 
 | Tool | Purpose | Command |
 |------|---------|---------|
-| **cu-analyzer-run** | Run analysis or extract layout | `python tools/cu-analyzer-run/run.py` |
+| **[Official CU CLI](https://github.com/Azure/content-understanding-toolkit/tree/main/cu-cli)** | Default for routine CU operations and ordinary batches | `cu --help` |
+| **cu-analyzer-run** | Advanced testing, diagnostics, and CU-Tools result bundles | `python tools/cu-analyzer-run/run.py` |
 | **create_and_test** | Create + validate + test (all-in-one) | `python tools/cu-analyzer-run/create_and_test.py` |
-| **[cu-cli](tools/cu-cli/README.md)** | Direct CLI/library for CU operations (create/analyze/classify/defaults); the operations layer other tools build on | `python -m cu_cli --help` (from `tools/cu-cli/`) |
+| **[Local compatibility layer](tools/cu-cli/README.md)** | Internal legacy operations used by runners; not the official CLI | Used by existing scripts; no separate install |
 | **cu-analyzer-validate** | Check schema before creating | `python tools/cu-analyzer-validate/cu_analyzer_validator.py` |
 | **cu-results-export** | Convert results to CSV/Excel | `python tools/cu-results-export/export.py` |
 | **cu-cost-estimator** | Estimate and summarize CU processing costs | `python tools/cu-cost-estimator/cu_cost_estimator.py` |
@@ -149,26 +318,34 @@ Start with Tutorial 01 to explore the API, then follow 02 or 03 for the full age
 ---
 ## 🧪 Running Tests
 
-```bash
-# Run all tests for cu-analyzer-run
-cd tools/cu-analyzer-run && python -m pytest tests/ -v
+Run from the repository root. These commands exclude the compatibility layer's
+live smoke tests:
 
-# Run cu-cli tests (mocked unit tests + skipped-by-default live smoke test)
-cd tools/cu-cli && python -m pytest tests/ -v
+```powershell
+# Run all tests for cu-analyzer-run
+python -m pytest tools\cu-analyzer-run\tests -v
+
+# Run the local compatibility layer's unit tests
+python -m pytest tools\cu-cli\tests -m "not integration" -v
 
 # Run export tests
-cd tools/cu-results-export && python -m pytest tests/ -v
+python -m pytest tools\cu-results-export\tests -v
 
 # Run cost-estimator tests
-cd tools/cu-cost-estimator && python -m pytest tests/ -v
+python -m pytest tools\cu-cost-estimator\tests -v
 ```
+
+See the [compatibility-layer guide](tools/cu-cli/README.md#tests) for explicit,
+billable live smoke tests. Those test the legacy runner backend, not the
+official CLI.
 
 ---
 ## 📂 Repository Structure
 
 ```
 CU-Tools/
-├── Examples/                          # 📖 Hands-on tutorials
+├── examples/                          # Public tutorials; no customer data
+│   ├── _TEMPLATE/                    # Case + numbered-iteration manifests
 │   ├── 01-API-Testing/                # Explore REST API with .http files
 │   ├── 02-Invoice-Extraction/         # Document analyzer tutorial
 │   ├── 03-Video-Analysis/             # Video analyzer tutorial
@@ -189,9 +366,9 @@ CU-Tools/
 │   │   └── cu_analyzer_validator.py
 │   ├── cu-client/                     # Shared API client library
 │   │   └── content_understanding_client.py
-│   ├── cu-cli/                        # CU operations layer (CLI + library)
+│   ├── cu-cli/                        # Compatibility layer, NOT official cu-cli
 │   │   ├── cu_cli/operations.py       # create/analyze/classify/delete + poll
-│   │   ├── cu_cli/cli.py              # python -m cu_cli entry point
+│   │   ├── cu_cli/cli.py              # Legacy entry point, not for new use
 │   │   └── tests/
 │   ├── cu-results-export/             # Export JSON results to CSV/Excel
 │   │   ├── export.py
@@ -222,6 +399,7 @@ CU-Tools/
 │       ├── generate-analyzer-video.skill.md
 │       └── iterate-schema.skill.md
 │
+├── docs/iteration-workspaces.md       # Canonical v1 workspace contract
 ├── analyzer_templates/                # Example analyzer configurations
 ├── schemas/                           # Example extraction schemas
 ├── Agents.md                          # Technical reference (source of truth)

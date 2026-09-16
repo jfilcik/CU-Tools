@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "kind": "iteration",
+  "id": "001",
+  "title": "Reproduction baseline",
+  "hypothesis": "The selected analyzer can reproduce the reported behavior on the frozen input set.",
+  "status": "planned",
+  "baseline_iteration": null,
+  "defect_ids": [],
+  "bugs": [],
+  "changes": [],
+  "execution": {
+    "command": null,
+    "api_version": null,
+    "model": null,
+    "analyzer_id": null,
+    "region": null,
+    "tool_version": null
+  },
+  "inputs": [],
+  "outputs": [
+    {
+      "label": "Baseline plan and report",
+      "path": "report.md",
+      "role": "report"
+    }
+  ],
+  "results": {
+    "summary": "Not run; inputs, schema, evaluator, and acceptance criteria have not been supplied.",
+    "metrics": [],
+    "cost": {
+      "status": "unknown",
+      "amount": null,
+      "currency": "USD",
+      "basis": "Not run; no usage, pricing calculation, or attributable charge evidence is available."
+    },
+    "decision": "Do not run until inputs, acceptance criteria, and any required cost approval are recorded.",
+    "limitations": [
+      "No input documents or schema have been supplied.",
+      "No reviewed truth, evaluator, holdout, or acceptance policy has been supplied.",
+      "No quality, latency, cost, or straight-through-processing outcome has been measured."
+    ]
+  }
+}

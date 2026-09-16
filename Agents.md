@@ -2,17 +2,24 @@
 
 ## Purpose
 
-This repository is a **streamlined toolkit for creating and testing Azure AI Content Understanding (CU) analyzers**. It's designed for developers who need to extract structured data from documents (invoices, forms, contracts, etc.) using AI-powered field extraction.
+This repository is a **toolkit for turning customer reproductions into
+evidence-based Azure AI Content Understanding (CU) analyzer improvements**.
+Evaluate quality and cost at each numbered iteration, progressing toward safe
+straight-through processing rather than treating a successful API call as
+proof of business correctness.
 
 **Target Audience**: Developers building CU analyzers for production use, testing schema designs, and validating extraction quality.
 
-> **⚠️ DEDUPLICATION RULE**: This file is the authoritative source for technical specifications.
+> **⚠️ DEDUPLICATION RULE**: This file is authoritative for CU API behavior and analyzer correctness.
+> [docs/iteration-workspaces.md](docs/iteration-workspaces.md) is authoritative
+> for the v1 workspace/manifest contract and experiment evidence requirements.
 > `.github/copilot-instructions.md` contains behavioral guidance and quick references only.
 > Do NOT duplicate content between these files. When adding new content:
 > - **Here**: API rules, error handling, testing patterns, definition of done, correctness rules
 > - **copilot-instructions.md**: AI behavior, vocabulary, style constraints, navigation hints
 
 **Key Use Cases**:
+- Customer repro → hypothesis → controlled improvement → evidence-based decision
 - Schema development with AI-assisted field generation
 - Scale testing (1×N documents) to verify coverage across document variations
 - Stability testing (N×1 document) to measure extraction consistency
@@ -42,11 +49,13 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
   - `prompt_cache.py` - Correlate model-call telemetry with CU runs; validate cache-metric provenance, weighted cache ratios, and explicit-price scenarios. Supports offline exports and schema-checked, metadata-only Kusto reads.
 
 **Client Library**:
+- Official CU CLI (installed separately from PyPI or the Azure toolkit source):
+  - `cu` / `cu-cli` - Preferred user-facing commands for routine CU operations.
 - `tools/cu-client/`
-  - `content_understanding_client.py` - Base CU API client (shared by all tools)
+  - `content_understanding_client.py` - Legacy REST client used by existing CU-Tools workflows.
 - `tools/cu-cli/`
-  - `cu_cli/operations.py` - High-level, poll-aware CU operations (create-and-wait, analyze-and-wait, classify-and-wait, safe delete) built on `cu-client`. This is the single place actual CU service calls happen; `cu-analyzer-run` imports it instead of duplicating polling logic.
-  - `cu_cli/cli.py` - `python -m cu_cli` command-line interface exposing the same operations for direct/scripted use.
+  - `cu_cli/operations.py` - Local compatibility layer over `cu-client` used by the runners. It does not delegate to the official CLI or its SDK.
+  - `cu_cli/cli.py` - Legacy command interface retained for compatibility, not the recommended user entry point. Its package name overlaps the official `cu_cli`.
 
 **Supporting Tools**:
 - `tools/cu-reading-order-viz/`
@@ -56,8 +65,10 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
 
 **Getting Started**:
 - `README.md` - Overview and quick start
-- `GETTING_STARTED.md` - Step-by-step first analyzer walkthrough
+- `README.md` Quick Start - CLI installation, configuration, and first operations
 - `Agents.md` (this file) - Authoritative guide for AI assistants
+- `docs/iteration-workspaces.md` - Canonical v1 case/iteration manifests, cost and STP evidence
+- `examples/_TEMPLATE/` - Copyable generic case with an honest planned baseline
 
 **Guidance**:
 - `.github/copilot-instructions.md` - AI assistant behavior and navigation preferences
@@ -83,6 +94,8 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
 ### Examples
 
 **Reusable Examples** (`examples/`):
+- `_TEMPLATE/` - Public-safe template; copy outside the library for private customer cases
+- `02-Invoice-Extraction/` - Existing tutorial with additive planned iteration `001` navigation; no new run results
 - `05-Agentic-Contract-Obligations/` - Preview agentic contract extraction with exact-quote evidence, CUAD preparation, and EvalLens evaluation
 - `06-Contract-Obligation-Golden-Set/` - Reviewed ten-contract atomic-obligation gold set with paired Standard and Agentic schemas, fail-closed evaluation, notebook, and measured comparison report
 
@@ -96,14 +109,81 @@ This repository is a **streamlined toolkit for creating and testing Azure AI Con
 
 ## Commands
 
+### Issue and iteration workspaces
+
+Follow [the canonical v1 guide](docs/iteration-workspaces.md) for new examples
+and issues. Select the case and numbered iteration **before** generating
+schemas, outputs, exports, or reports. Keep customer-specific work private;
+never copy it into public CU-Tools. Existing shared `samples/` and legacy
+evidence remain in place.
+
+Every experiment links its hypothesis, addressed defects, immutable input
+inventory/schema snapshots, versioned evaluation, raw output, report, cost,
+and decision. New hypothesis/configuration/dataset/metric changes require a
+new number. `--iterations N` is repeated trials within that number. Keep root
+navigation synchronized from the authoritative iteration manifests; do not
+overwrite completed experiments. The commands below illustrate runner
+behavior; for new cases direct their outputs into the selected iteration's
+`outputs/raw/` and derived artifacts into `outputs/evaluation/`.
+
+Record verified tracking references in the root and directly related iteration
+`bugs` arrays, following [tracking bugs](docs/iteration-workspaces.md#tracking-bugs).
+Keep them separate from stable local `defects`/`defect_ids`; do not infer bug
+identity or status from support case numbers. Preserve receipts and original
+evidence when adding links.
+Keep issue IDs unchanged and the optional root URL `slug` stable after sharing;
+follow [share slugs](docs/iteration-workspaces.md#readable-share-slugs).
+
+### CLI-first operation routing
+
+Use the official `cu` executable for connectivity (`cu doctor`), analyzer
+list/show/validate/create/delete, default model mappings, single-file analysis,
+and ordinary concurrent folder analysis. Check the installed command's
+`--help` rather than translating legacy wrapper flags mechanically.
+Installation and upgrade commands are maintained in `README.md`.
+
+Keep `run.py` for repeated scale/stability evaluations, `--diagnostics`,
+protected-file handling, and downstream consumers requiring CU-Tools metadata,
+usage summaries, or result envelopes. Keep `create_and_test.py` for integrated
+validation/create/test/cleanup and classify-and-route dependency orchestration.
+Do not remove either runner or rewrite working evaluation workflows just to
+route a one-off operation through the CLI.
+
+The official CLI uses `CU_ENDPOINT`, `CU_API_KEY`, `CU_AUTH_MODE`, and its saved
+config. Existing runners use `AZURE_AI_ENDPOINT` / `AZURE_AI_API_KEY` and
+load the repository `.env`; the official CLI does not load that file.
+`CU_API_VERSION` is shared. Ensure both paths target the intended resource.
+Never print credentials or pass them on the command line.
+
+Run `cu` from the repository root or outside the repository. Do not add
+`tools/cu-cli` to `PYTHONPATH` for official CLI use: the local package has
+the same `cu_cli` name. Installing the official package does not convert the
+existing REST-based runner backend to the SDK.
+
+Custom analyzer IDs use letters, digits, and underscores (up to 64 characters).
+Prefer a new ID/version for updates. There is no in-place replacement; deleting
+and recreating the same ID is destructive and needs explicit intent. Model
+defaults are resource-wide: inspect them first and use
+`cu defaults set --no-from-config --model MODEL=DEPLOYMENT` for a targeted
+mapping update; do not replace all defaults incidentally.
+
+CLI output files and CU-Tools run bundles are different contracts. Retain the
+runner for reporting pipelines that depend on its envelope/metadata. Existing
+workflow examples below deliberately use runners where that output is needed.
+Use explicit cost approval for paid scale/stability runs; `--force` on the CLI
+re-bills existing outputs whereas `--skip-existing` preserves them.
+
 ### Setup
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+For routine operations, follow `README.md` to install the official CLI and
+configure Entra ID or API-key authentication. No repository dependencies are
+needed. For advanced Python workflows, from the repository root:
+
+```powershell
+python -m pip install -r requirements.txt
 
 # Configure Azure credentials
-cp .env.sample .env
+Copy-Item .env.sample .env
 # Edit .env with your AZURE_AI_ENDPOINT and AZURE_AI_API_KEY
 ```
 
@@ -111,12 +191,16 @@ cp .env.sample .env
 
 ### Validate Setup
 
-```bash
-# Test Azure connectivity (if validation scripts exist)
-python tools/cu-analyzer-validate/cu_analyzer_validator.py schemas/example.json
+```powershell
+# Test connectivity using the official CLI configuration
+cu doctor
+
+# Offline schema validation (does not test connectivity)
+cu analyzer validate .\schemas\my_analyzer_v1.json --api-version 2025-11-01
 ```
 
-**Explanation**: Validates that your schema is correct before attempting to create an analyzer. This catches errors early and provides clear error messages.
+Use the local validator for CU-Tools-specific quality checks and the preview
+workflow contract described below.
 
 ### Test
 
@@ -450,8 +534,17 @@ Document Packet (multi-page PDF or batch of images)
 - Always export results to CSV for analysis
 - Include: latency, tokens (prompt/completion), confidence, fill rate
 - Compare across schema versions to detect drift/regression
+- For new experiments, follow the [iteration evidence and STP gates](docs/iteration-workspaces.md#evidence-required-for-an-stp-claim).
+  Include reviewed correctness, explicit denominators, failures/retries,
+  holdout scope, false accepts, and human review; fill/confidence are diagnostics.
 
 ### 4.9 Cost & Token Management
+
+Every iteration records cost status, amount (or `null`), currency, and evidence
+basis using [the workspace contract](docs/iteration-workspaces.md#iteration-manifest-caseiterations001manifestjson).
+Measured token usage times a price sheet remains an **estimated cost**, not
+an actual charge. Missing usage/pricing is unknown, not zero. Include failures,
+repeats/retries, and any billable evaluation calls or state coverage gaps.
 
 **Token Tracking**:
 - Results include `promptTokens` and `completionTokens`
@@ -609,14 +702,17 @@ if not input_path.exists():
 
 **When**: Creating a new example project to demonstrate analyzer patterns.
 
-**Pattern**: Copy `Issues/_TEMPLATE/` structure
-- Create `Issues/<project>/` folder
-- Add `samples/`, `schemas/`, `test_results/`, `reports/` subfolders
-- Include project-specific README.md
-- Document use case and field patterns
+**Pattern**: Copy `examples/_TEMPLATE/` and follow
+[docs/iteration-workspaces.md](docs/iteration-workspaces.md).
+- Create `examples/<project>/` only for approved public data; create customer
+  cases in a restricted workspace outside public CU-Tools.
+- Add the case manifest/README and numbered iteration manifests, immutable
+  input/schema snapshots, raw output, evaluation, and report links.
+- Start planned; do not invent results, cost, or nonexistent artifact paths.
+- Add navigation to old examples without relocating or overwriting evidence.
 
 **Update Required**:
-- Create project in `Issues/<project>/`
+- Add the public example to `examples/README.md`
 - Add reference in "Examples" section of this file
 - Consider adding to README.md if notable pattern
 
@@ -657,12 +753,20 @@ Before finishing a change:
 - [ ] This file (Agents.md) updated (if repo structure changed)
 - [ ] Inline code comments added (if complex logic)
 
-### 5. Report Created (for analyzer work)
+### 5. Evidence and Report Created (for analyzer work)
 - [ ] Schema validates successfully
-- [ ] Fill rate >80% for critical fields (target, adjust per use case)
-- [ ] Confidence >0.85 for critical fields (target, adjust per use case)
+- [ ] Iteration manifest links exact inputs/hashes, raw evidence, versioned evaluator/truth, and report
+- [ ] Correctness/coverage metrics state denominators, sources, failures, and holdout scope
+- [ ] Fill/confidence diagnostics are separate from correctness and STP claims
+- [ ] Cost recorded for this iteration as measured, estimated, unknown, or not applicable with basis
 - [ ] Results exported to CSV
-- [ ] Report documents tradeoffs and decisions
+- [ ] Report documents hypothesis, baseline comparison, limitations, and accept/reject/inconclusive decision
+- [ ] Root iteration index is synchronized; completed evidence remains immutable
+
+For planned documentation-only baselines, record **not run**, empty measured
+metrics, unknown/null cost, and missing prerequisites; do not claim the
+execution checklist passed. STP claims require the case-level evidence
+defined in the workspace guide, not aggregate fill/confidence targets.
 
 **For new analyzers specifically**:
 - [ ] Schema follows design best practices (clear descriptions, location hints, alternative labels)
@@ -690,7 +794,7 @@ Before finishing a change:
 
 **Resources**:
 1. **README.md**: Overview and quick start
-2. **GETTING_STARTED.md**: Step-by-step first analyzer walkthrough
+2. **README.md Quick Start**: CLI installation, configuration, and first operations
 3. **.github/TROUBLESHOOTING.md**: Common issues and solutions
 4. **Tool READMEs**: Detailed tool-specific documentation
 5. **.github/skills/**: Complete workflow guides
@@ -728,13 +832,16 @@ python tools/cu-results-export/export.py --input results/ --output results.csv
 ### Tool Paths
 
 - **CU Client**: `tools/cu-client/content_understanding_client.py`
-- **CU CLI (operations layer)**: `tools/cu-cli/cu_cli/operations.py`, `tools/cu-cli/cu_cli/cli.py`
+- **Official CU CLI**: installed `cu` executable; see `README.md`
+- **Local compatibility layer (not official CLI)**: `tools/cu-cli/cu_cli/operations.py`, `tools/cu-cli/cu_cli/cli.py`
 - **Analyzer Run**: `tools/cu-analyzer-run/run.py`
 - **Create & Test**: `tools/cu-analyzer-run/create_and_test.py`
 - **Validator**: `tools/cu-analyzer-validate/cu_analyzer_validator.py`
 - **Exporter**: `tools/cu-results-export/export.py`
 - **Reading Order Visualizer**: `tools/cu-reading-order-viz/visualize_reading_order.py`
-- **Examples**: `Issues/_TEMPLATE/`, `Issues/WK_Runs/WK/`, `Issues/Crowne/`, `Issues/Carvana/`
+- **Generic template and public examples**: `examples/_TEMPLATE/`, `examples/README.md`
+- **Workspace contract**: `docs/iteration-workspaces.md`
+- **Legacy private references** (only in an authorized customer workspace): `Issues/WK_Runs/WK/`, `Issues/Crowne/`, `Issues/Carvana/`
 - **Prompts**: `.github/prompts/*.prompt.md`
 - **Skills**: `.github/skills/*.skill.md`
 

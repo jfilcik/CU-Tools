@@ -137,6 +137,7 @@ class TestErrorHandling:
     def test_missing_credentials_returns_error_code(self, monkeypatch, capsys):
         monkeypatch.delenv("AZURE_AI_ENDPOINT", raising=False)
         monkeypatch.delenv("AZURE_AI_API_KEY", raising=False)
-        rc = cu_cli_cli.main(["analyzer", "list"])
+        with patch("cu_cli.operations.load_dotenv"):
+            rc = cu_cli_cli.main(["analyzer", "list"])
         assert rc == 1
         assert "AZURE_AI_ENDPOINT" in capsys.readouterr().err

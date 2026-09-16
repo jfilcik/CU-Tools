@@ -51,12 +51,14 @@ def get_client(
     endpoint: Optional[str] = None,
     api_key: Optional[str] = None,
     x_ms_useragent: str = "cu-cli",
+    load_env: bool = True,
 ) -> AzureContentUnderstandingClient:
     """
     Build a CU client from explicit args, falling back to environment
     variables (and a `.env` file, if present) for endpoint/API key/version.
     """
-    load_dotenv()
+    if load_env:
+        load_dotenv()
 
     endpoint = endpoint or os.getenv("AZURE_AI_ENDPOINT")
     api_key = api_key or os.getenv("AZURE_AI_API_KEY")
