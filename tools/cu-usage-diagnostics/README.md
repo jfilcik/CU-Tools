@@ -5,6 +5,8 @@ Fetch and summarize **Azure Monitor diagnostic logs** for the
 
 This tool reads the **standard customer-visible Azure Monitor diagnostic-log
 export** path (`insights-logs-azureopenairequestusage` blobs).
+It uses only the caller's authorized resource and storage account; no
+service-side telemetry access or internal test infrastructure is required.
 
 Use this tool when you have:
 
@@ -76,7 +78,7 @@ The `AzureOpenAIRequestUsage` diagnostic record's full field set is:
 `x-ms-correlation-request-id`, `x-ms-client-request-id`). `correlationId`
 looked like the obvious candidate but is not usable for this purpose:
 verified against a known run where several CU requests each fanned out into
-multiple model calls (CU's internal ~25-page chunking), every model call in
+multiple model calls, every model call in
 the same CU request had a **distinct** `correlationId` — it identifies one
 AOAI-side model call, not the CU request that triggered it, and it does not
 group a CU request's own chunk calls together either. `processID`/`threadID`

@@ -1,228 +1,103 @@
-# Tutorial 03: Video Analysis — Agent-Based Workflow
+# Tutorial 03: Video analysis
 
-Build a video analyzer that detects scenes, objects, and activities with accurate, keyframe-anchored timestamps. This tutorial covers the unique considerations of video analysis in Content Understanding.
+Create a video analyzer with grounded scene/object timestamps and evaluate
+its outputs against the source video. Use the official CLI for all CU service
+operations.
 
-## What You'll Learn
+## Prerequisites and sample
 
-- How CU's two-stage pipeline works for video (keyframes + transcript → AI extraction)
-- The keyframe-anchored timestamp pattern
-- Schema design for temporal fields (scenes, objects with timestamps)
-- Classifying video content (sentiment, category)
-- Validating timestamps against KeyFrameTimesMs ground truth
+Follow the [root Quick Start](../../README.md#quick-start): Python 3.10+,
+official CLI profiles, your authorized CU resource/model mappings, and local
+reporting dependencies. No repository `.env` is loaded by `cu`.
+Run commands from the repository root.
 
-## Prerequisites
+The sample `samples/FlightSimulator.mp4` is approximately 37 seconds of flight
+simulator footage. Review data permissions and analysis cost before uploading
+any video. For a real case, select a numbered iteration using the
+[workspace guide](../../docs/iteration-workspaces.md); keep source/schema
+snapshots, raw output, evaluation, and reports together.
 
-- Azure AI Foundry with Content Understanding enabled
-- Python 3.9+ with dependencies installed (`pip install -r ../../requirements.txt`)
-- `.env` configured at repo root (copy from `.env.sample`)
-- GitHub Copilot (recommended, but manual steps are provided)
+## Timestamp design
 
-## Sample Video
-
-| File | Type | Duration | What It Contains |
-|------|------|----------|------------------|
-| `FlightSimulator.mp4` | MP4 | ~37 sec | Flight simulator gameplay footage |
-
----
-
-## Key Concept: Video Two-Stage Pipeline
-
-Video analysis differs from documents:
-
-```
-Stage 1: Content Extraction
-  → Extracts audio transcript with timestamps
-  → Samples keyframes at specific moments (hh:mm:ss.ms format)
-  → Detects camera shot boundaries
-  → Output: text descriptions of keyframes + transcript
-
-Stage 2: AI Field Extraction
-  → GPT-4.1 analyzes the keyframe descriptions and transcript
-  → Uses your field descriptions to extract/generate values
-  → ⚠️ The model does NOT see actual video frames — only text about them
-```
-
-**Critical implication:** The AI can only reference timestamps that appear in the keyframe list. It cannot observe arbitrary moments in the video.
-
-### The Keyframe Anchoring Rule
-
-When designing timestamp fields:
-
-✅ **DO:** Instruct the model to copy timestamps exactly from the Key Frames list
-```json
-"startTime": {
-  "description": "MUST be copied exactly from a keyframe timestamp. Format: hh:mm:ss.ms"
-}
-```
-
-❌ **DON'T:** Let the model estimate or interpolate timestamps
-```json
-"startTime": {
-  "description": "When this scene starts"
-}
-```
-
----
-
-## Workflow Overview
-
-```
-samples/              →  schemas/                →  test_results/     →  reports/
-(FlightSimulator.mp4)    (video_analysis_v1.json)   (JSON + keyframes)    (CSV export)
-```
-
-> **Note:** Video analysis skips the separate layout extraction step used for documents. The video pipeline handles extraction internally.
-
----
-
-## Step 1: Review the Schema
-
-Open `schemas/video_analysis_v1.json` to see the video-specific patterns:
-
-**Timestamp fields use `type: "string"`:**
-```json
-"startTime": {
-  "type": "string",
-  "method": "generate",
-  "description": "...Format: hh:mm:ss.ms. MUST match a keyframe timestamp exactly."
-}
-```
-
-**Classification fields use `enum`:**
-```json
-"Sentiment": {
-  "type": "string",
-  "method": "classify",
-  "enum": ["Exciting", "Informational", "Calm", "Dramatic", "Humorous"]
-}
-```
-
-**Generate vs Extract:** Video fields typically use `method: "generate"` (the model creates structured output from keyframe descriptions) rather than `method: "extract"` (which pulls verbatim text).
-
----
-
-## Step 2: Validate Schema
-
-```bash
-python tools/cu-analyzer-validate/cu_analyzer_validator.py \
-  Examples/03-Video-Analysis/schemas/video_analysis_v1.json
-```
-
----
-
-## Step 3: Create Analyzer and Test
-
-**With Copilot:**
-```
-"Create and test the video analyzer using the schema in 
- Examples/03-Video-Analysis/schemas/video_analysis_v1.json
- with the video in Examples/03-Video-Analysis/samples/"
-```
-
-**Manually:**
-```bash
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema Examples/03-Video-Analysis/schemas/video_analysis_v1.json \
-  --input Examples/03-Video-Analysis/samples/ \
-  --output Examples/03-Video-Analysis/test_results/v1/
-```
-
-> **Note:** Video analysis takes longer than document analysis (30-60 seconds typical). The tool polls automatically until complete.
-
----
-
-## Step 4: Validate Timestamps
-
-After running analysis, check the result JSON files for the `KeyFrameTimesMs` array. This is your ground truth for keyframe positions:
+Temporal evidence is limited by the sampled frames and transcript available
+to the analyzer. Instruct timestamp fields to copy available frame timestamps
+rather than interpolate arbitrary moments. Use strings, not floating-point
+numbers:
 
 ```json
 {
-  "contents": [{
-    "KeyFrameTimesMs": [0, 1500, 3000, 6375, 9750, ...]
-  }]
+  "startTime": {
+    "type": "string",
+    "method": "generate",
+    "description": "Copy an available keyframe timestamp exactly for the beginning of this event. Format: hh:mm:ss.mmm. Do not estimate an unsampled time."
+  }
 }
 ```
 
-**Validation levels:**
-| Match Quality | Definition | Assessment |
-|---------------|------------|------------|
-| **Exact** | Generated timestamp matches a KeyFrameTimesMs value | ✅ High confidence |
-| **Near** | Within 500ms of a keyframe | ⚠️ Acceptable for navigation |
-| **No match** | Timestamp doesn't correspond to any keyframe | ❌ Hallucinated — needs iteration |
+Review `schemas/video_analysis_v1.json` for scene/object descriptions and
+classification fields. Do not claim that a generated time is source-grounded
+just because it has the right format. Frame alignment and whether the event
+actually occurs are separate checks.
 
----
+## Validate, create, and analyze
 
-## Step 5: Export and Evaluate
+```powershell
+$case = ".\examples\03-Video-Analysis"
+cu analyzer validate "$case\schemas\video_analysis_v1.json" --api-version 2025-11-01
+python tools\cu-analyzer-validate\cu_analyzer_validator.py "$case\schemas\video_analysis_v1.json"
 
-```bash
-python tools/cu-results-export/export.py \
-  --input Examples/03-Video-Analysis/test_results/v1/ \
-  --output Examples/03-Video-Analysis/test_results/v1/results.csv
+cu analyzer create --name tutorial_video_v1 --schema "$case\schemas\video_analysis_v1.json" --api-version 2025-11-01
+
+# Inspect discovery locally first.
+cu analyze "$case\samples\FlightSimulator.mp4" --analyzer tutorial_video_v1 `
+  --json --output-dir .\video-tutorial\results --dry-run
+
+# Billable: execute only after scope/cost approval.
+cu analyze "$case\samples\FlightSimulator.mp4" --analyzer tutorial_video_v1 `
+  --json --output-dir .\video-tutorial\results `
+  --report-file .\video-tutorial\status.json --api-version 2025-11-01 --on-existing error
 ```
 
-**What to evaluate for video:**
+Use a new versioned analyzer ID/output path if one exists already. The CLI
+handles request submission and polling. Video latency varies; the verified
+CLI has no `--timeout` flag. Preserve partial evidence before considering a
+paid retry, and only delete explicitly owned analyzers when cleanup is intended.
 
-| Metric | Target | Video-Specific Notes |
-|--------|--------|---------------------|
-| Timestamp accuracy | >80% exact match | Compare against KeyFrameTimesMs |
-| Scene detection | Reasonable boundaries | Camera cuts should trigger new scenes |
-| Object detection | Key objects found | Limited to what keyframe captions describe |
-| Classification | Correct category | Sentiment and category should match content |
+## Evaluate
 
----
-
-## Step 6: Iterate
-
-Common improvements for video schemas:
-
-1. **Tighten timestamp instructions** — Repeat the "MUST copy from Key Frames" rule in every timestamp field
-2. **Simplify scene descriptions** — Vague descriptions produce vague results
-3. **Adjust object granularity** — Too many objects → noise; too few → missed items
-4. **Add duration fields** — Calculate from start of next scene for scene duration
-
-### Large Videos (>20MB)
-
-For videos larger than 20MB, use URL-based analysis with Azure Blob Storage:
-
-```bash
-# Upload to blob storage, then use the SAS URL
-python tools/cu-analyzer-run/run.py \
-  --analyzer-id {your-analyzer-id} \
-  --input "https://your-storage.blob.core.windows.net/videos/large_video.mp4?{sas_token}" \
-  --output Examples/03-Video-Analysis/test_results/large/
+```powershell
+python tools\cu-results-export\export.py `
+  --input .\video-tutorial\results --output .\video-tutorial\results.csv
 ```
 
----
+Where saved results expose frame timestamps, compare generated timestamps to
+that inventory. Do not assume a `KeyFrameTimesMs` array is always present or
+fabricate one from generated fields. If frame evidence is absent, record the
+limitation and review timestamps directly against the source video.
 
-## API Version Notes
+Measure exact alignment separately from a declared navigation tolerance,
+scene/event correctness, object coverage, and classification accuracy.
+For example, a 500 ms navigation tolerance is an application policy, not proof
+of exact grounding. Include failed/missing results in the denominator.
 
-- Use GA API version `2025-11-01`
-- `enableSegmentation`, `segmentationMode`, and `segmentationDefinition` are **NOT supported** in the GA API
-- For video segmentation (chapters, scenes), use `contentCategories` with `enableSegment: true` — the same classify-and-route pattern used for documents. See the [classify-and-route skill](../../.github/skills/generate-analyzer-classify-route.skill.md).
+Record numeric cost/timing only when available with a stated basis. CLI console
+usage/time output is not a guaranteed per-document JSON metric. Missing cost
+is unknown; good timestamp formatting or high confidence is not STP readiness.
 
----
+## Iterate
 
-## Folder Structure
+Tighten timestamp/scene descriptions, adjust object granularity, and save a
+new schema/analyzer version. Use ordinary CLI batches for multiple videos and
+[cu-experiments](../../tools/cu-experiments/README.md) for repeated trials or
+analyzer comparisons. Keep the global concurrency and cost budget explicit.
 
-```
-03-Video-Analysis/
-├── README.md                    # This tutorial
-├── samples/                     # Source videos
-│   └── FlightSimulator.mp4     # Flight simulator gameplay (~37 sec)
-├── schemas/                     # Analyzer schemas (versioned)
-│   └── video_analysis_v1.json  # Initial video schema with keyframe anchoring
-├── test_results/                # Analysis results by run (generated)
-└── reports/                     # Summary reports and exports (generated)
-```
+The verified public CLI accepts local files; do not copy obsolete URL/SAS
+upload commands or assume a fixed 20 MB cutoff. Check current CLI/service
+support for your input and record any unsupported capability rather than
+silently switching execution backends. Never put signed URLs in reports.
 
-## Next Steps
-
-- **[Eval Skill](../../.github/skills/eval-cu.skill.md)** — Run systematic evaluations
-- **[Video Analyzer Skill](../../.github/skills/generate-analyzer-video.skill.md)** — Advanced video patterns
-- **[Classify-and-Route Skill](../../.github/skills/generate-analyzer-classify-route.skill.md)** — Video segmentation via content categories
-
-## Related Resources
-
-- [Agents.md](../../Agents.md) — Technical reference (Section 4.5: Two-Stage Pipeline)
-- [Video analyzer skill](../../.github/skills/generate-analyzer-video.skill.md) — Full video workflow reference
-- [Analyzer templates](../../analyzer_templates/) — `marketing_video.json`, `content_video.json` examples
+For segmentation, use supported `contentCategories`/`enableSegment` patterns
+appropriate to your API/schema; do not add obsolete `enableSegmentation`,
+`segmentationMode`, or `segmentationDefinition` flags. See the
+[video skill](../../.github/skills/generate-analyzer-video.skill.md) and
+[classify-and-route workflow](../../.github/skills/generate-analyzer-classify-route.skill.md).

@@ -2,10 +2,90 @@
 
 from __future__ import annotations
 
+import json
+import math
 import re
+import sys
 import unicodedata
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "cu-results-export"))
+from cu_result_io import load_results, result_status
+
+
+def read_analysis_result(path: Path) -> dict[str, Any]:
+    """Use the shared offline loader for shape validation and native normalization."""
+    return load_results(path)[0]
+
+
+def load_run_metadata(result_dir: Path, report_path: Path | None = None) -> dict[str, Any]:
+    """Read official CLI status reports or previously saved CU-Tools metadata."""
+    path = report_path or result_dir / "analyze-report.json"
+    if report_path is None and not path.exists():
+        path = result_dir / "metadata.json"
+    metadata = json.loads(path.read_text(encoding="utf-8"))
+    schema = metadata.get("schema")
+    if schema is None:
+        if path.name != "metadata.json" or "results" not in metadata:
+            raise ValueError("Expected a CU CLI analyze report or saved metadata.json.")
+        return metadata
+    if schema != "cu-cli/analyze-report/v1" or metadata.get("result_view") != "full":
+        raise ValueError("Expected cu-cli/analyze-report/v1 from cu analyze --json.")
+
+    root = result_dir.resolve()
+    results = []
+    seen = set()
+    for item in metadata["results"]:
+        document = item["input"]
+        doc_id = Path(document).stem
+        if doc_id in seen:
+            raise ValueError(f"Duplicate document stem in CLI report: {doc_id}")
+        seen.add(doc_id)
+        row = {
+            "document": document,
+            "status": "success" if item["status"] == "succeeded" else "failed",
+            "error": (
+                item.get("error") or item.get("reason") or item["status"]
+                if item["status"] != "succeeded"
+                else ""
+            ),
+        }
+        output = item.get("output")
+        if output:
+            candidate = Path(output)
+            candidates = [candidate.resolve(), (root / candidate).resolve()]
+            for candidate in candidates:
+                if candidate.is_relative_to(root):
+                    row["result_path"] = str(candidate)
+                    break
+            else:
+                raise ValueError(f"CLI output is outside the supplied result directory: {doc_id}")
+        elif row["status"] == "success":
+            row["status"] = "failed"
+            row["error"] = "CLI report has no saved JSON output"
+        results.append(row)
+    return {"analyzer_id": metadata.get("analyzer", ""), "results": results}
+
+
+def recorded_number(value: Any) -> int | float | None:
+    """Keep unavailable measurements distinct from an explicitly recorded zero."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+        return value
+    return None
+
+
+def format_measure(
+    value: int | float | None,
+    *,
+    divisor: float = 1,
+    format_spec: str = ".1f",
+    suffix: str = "",
+) -> str:
+    if value is None:
+        return "not recorded"
+    return format(value / divisor, format_spec) + suffix
 
 
 def normalize_text(value: Any) -> str:

@@ -42,7 +42,7 @@ case/
 Existing `samples/` may serve as the immutable shared corpus. Do not move,
 rewrite, or relabel old `layout_results/`, `test_results/`, or `reports/` as a
 new run. Add links to legacy evidence and describe its known provenance and
-gaps. Existing example commands and consumers remain supported.
+gaps. Saved evidence remains usable; new execution uses the official CLI.
 
 ### What counts as an iteration?
 
@@ -53,7 +53,7 @@ acceptance policy, or metric definition starts a **new number**. Never
 overwrite a finished experiment. Planned records can be filled in before
 execution; retain attempt-level evidence while a run is active.
 
-`run.py --iterations 10` means ten repeated trials **inside one experiment**,
+`cu-experiments` with `--iterations 10` means ten repeated trials **inside one experiment**,
 not ten numbered experiments. Record each trial and its failures/retries.
 Scale (1×N) measures corpus coverage; stability (N×1) measures consistency.
 Neither replaces a correctness evaluation against reviewed truth.
@@ -278,14 +278,15 @@ them without inferring bug associations.
 3. **Freeze inputs.** Snapshot/hash the schema, inventory/hash the exact
    documents, version truth/evaluator/rules, and separate development from
    holdout. Do not embed expected customer answers in schema descriptions.
-4. **Validate and execute with approval.** Use official `cu` for routine
-   list/show/validate/create/delete and simple file/folder analysis. Check
-   `cu --help` for installed flags. Keep `run.py` for repeats, diagnostics,
-   and compatible bundles; `create_and_test.py` for lifecycle and routing
-   orchestration. These existing runners still use the legacy REST backend,
-   **not the official CLI/SDK**. Follow [CLI-first routing](../Agents.md#cli-first-operation-routing)
-   for credentials, safe updates, and cost approval. Save all output beneath
-   the selected iteration, never a shared mutable `latest` directory.
+4. **Validate and execute with approval.** Use official `cu` for every CU
+   service operation, including native concurrent file/folder analysis. Check
+   installed `--help`. Use the offline schema planner for dependency snapshots
+   and `cu-experiments` only for immutable repeated trials/comparison matrices;
+   it invokes native CLI batches within one global concurrency budget.
+   Follow [CLI-only routing](../Agents.md#cli-only-operation-routing) for
+   credentials, safe updates, result contracts, and cost approval. Link the
+   experiment's full expected matrix, native reports, and raw results. Save all
+   output beneath the selected iteration, never a mutable `latest` directory.
 5. **Evaluate.** Preserve raw responses unchanged. Put derived exports,
    evaluator outputs, and baseline comparisons under `outputs/evaluation/`.
    Count successes, failures, retries, and excluded inputs explicitly; failed

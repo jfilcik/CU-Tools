@@ -10,7 +10,9 @@ Automates the obvious schema work:
 
 from __future__ import annotations
 
+import hashlib
 import re
+from copy import deepcopy
 from typing import Any
 
 from cu_migrate.models import (
@@ -23,17 +25,17 @@ from cu_migrate.models import (
     ValidationStatus,
 )
 
-# Default model deployments expected by GA
+# Model IDs; resource-wide deployment mappings are managed by the official CLI.
 DEFAULT_MODELS: dict[str, Any] = {
-    "completion": {"deploymentName": "gpt-4.1"},
-    "embedding": {"deploymentName": "text-embedding-3-large"},
+    "completion": "gpt-4.1",
+    "embedding": "text-embedding-3-large",
 }
 
 
 def _resolve_base_analyzer_id(source: SourceAnalyzer) -> tuple[str | None, list[MigrationFinding]]:
     """Map a preview scenario to a GA baseAnalyzerId."""
     findings: list[MigrationFinding] = []
-    scenario = source.scenario or source.raw_definition.get("scenario", "")
+    scenario = source.scenario or source.definition.get("scenario", "")
 
     base_id = SCENARIO_TO_BASE_ANALYZER.get(scenario)
     if base_id is None:
@@ -51,7 +53,7 @@ def _resolve_base_analyzer_id(source: SourceAnalyzer) -> tuple[str | None, list[
         ))
     else:
         findings.append(MigrationFinding(
-            severity=FindingSeverity.NEEDS_REVIEW,
+            severity=FindingSeverity.NOT_SUPPORTED,
             category="base_analyzer",
             message=f"Could not map scenario '{scenario}' to a GA baseAnalyzerId",
             analyzer_id=source.analyzer_id,
@@ -79,10 +81,12 @@ def _strip_deprecated(definition: dict[str, Any], analyzer_id: str) -> tuple[dic
 
 def _generate_ga_id(source_id: str) -> str:
     """Produce a GA-friendly analyzer ID from the source ID."""
-    base = re.sub(r"[^a-zA-Z0-9_-]", "-", source_id)
-    if not base.endswith("-ga"):
-        base = f"{base}-ga"
-    return base
+    suffix = "_ga_v1"
+    base = re.sub(r"[^a-zA-Z0-9_]", "_", source_id)
+    if len(base) + len(suffix) > 64:
+        digest = hashlib.sha256(source_id.encode("utf-8")).hexdigest()[:8]
+        base = f"{base[:64 - len(suffix) - 9]}_{digest}"
+    return f"{base}{suffix}"
 
 
 def transform_analyzer(source: SourceAnalyzer) -> tuple[ProposedGAAnalyzer, list[MigrationFinding]]:
@@ -97,33 +101,63 @@ def transform_analyzer(source: SourceAnalyzer) -> tuple[ProposedGAAnalyzer, list
     cleaned_config, findings = _strip_deprecated(source.config, source.analyzer_id)
     all_findings.extend(findings)
 
-    # Also strip from raw definition for the payload
-    cleaned_raw, raw_findings = _strip_deprecated(dict(source.raw_definition), source.analyzer_id)
-    # Don't double-count raw findings
+    cleaned_raw, raw_findings = _strip_deprecated(source.definition, source.analyzer_id)
+    all_findings.extend(raw_findings)
 
     # 3. Build models block
-    models = dict(DEFAULT_MODELS)
-    all_findings.append(MigrationFinding(
-        severity=FindingSeverity.NEEDS_REVIEW,
-        category="models",
-        message="Added default models block — verify deployment names match your resource",
-        analyzer_id=source.analyzer_id,
-        recommended_action="Confirm 'gpt-4.1' and 'text-embedding-3-large' deployments exist",
-    ))
+    models = deepcopy(source.definition.get("models", DEFAULT_MODELS))
+    if "models" not in source.definition:
+        all_findings.append(MigrationFinding(
+            severity=FindingSeverity.NEEDS_REVIEW,
+            category="models",
+            message="Added default model IDs; no resource deployment mappings were checked or changed",
+            analyzer_id=source.analyzer_id,
+            recommended_action="Review model choices and inspect resource defaults using the official cu CLI",
+        ))
+    for role, model in models.items():
+        if isinstance(model, dict) and set(model) == {"deploymentName"}:
+            models[role] = model["deploymentName"]
+            all_findings.append(MigrationFinding(
+                severity=FindingSeverity.NEEDS_REVIEW,
+                category="models",
+                message=f"Converted legacy models.{role}.deploymentName to a string",
+                analyzer_id=source.analyzer_id,
+                recommended_action="Verify this value is a model ID and configure its deployment mapping with the official cu CLI",
+            ))
 
     # 4. Generate GA ID
     ga_id = _generate_ga_id(source.analyzer_id)
 
     # 5. Build GA payload
-    ga_payload: dict[str, Any] = {
-        "baseAnalyzerId": base_id or "prebuilt-document",
+    read_only = {
+        "analyzerId", "id", "name", "status", "createdAt", "createdDateTime",
+        "lastModifiedAt", "lastModifiedDateTime", "warnings", "supportedModels",
+        "trainingData", "config",
+    }
+    ga_payload = {key: deepcopy(value) for key, value in cleaned_raw.items() if key not in read_only}
+    ga_payload.update({
         "description": source.description or f"Migrated from {source.analyzer_id}",
         "models": models,
-    }
+    })
+    if base_id:
+        ga_payload["baseAnalyzerId"] = base_id
+    else:
+        ga_payload.pop("baseAnalyzerId", None)
     if source.field_schema:
-        ga_payload["fieldSchema"] = source.field_schema
+        ga_payload["fieldSchema"] = deepcopy(source.field_schema)
     if cleaned_config:
-        ga_payload["config"] = cleaned_config
+        ga_payload["config"] = deepcopy(cleaned_config)
+    categories = cleaned_config.get("contentCategories", {})
+    if isinstance(categories, dict) and any(
+        isinstance(category, dict) and category.get("analyzerId") for category in categories.values()
+    ):
+        all_findings.append(MigrationFinding(
+            severity=FindingSeverity.NEEDS_REVIEW,
+            category="routing",
+            message="Classifier analyzerId references are preserved, not redirected to proposed replacements",
+            analyzer_id=source.analyzer_id,
+            recommended_action="Create and test inner replacements first, then review routing IDs before creating the classifier",
+        ))
 
     # Determine validation status
     v_status = ValidationStatus.PASS
@@ -135,7 +169,7 @@ def transform_analyzer(source: SourceAnalyzer) -> tuple[ProposedGAAnalyzer, list
     proposed = ProposedGAAnalyzer(
         analyzer_id=ga_id,
         source_analyzer_id=source.analyzer_id,
-        base_analyzer_id=base_id or "prebuilt-document",
+        base_analyzer_id=base_id or "",
         models=models,
         config=cleaned_config,
         field_schema=source.field_schema,

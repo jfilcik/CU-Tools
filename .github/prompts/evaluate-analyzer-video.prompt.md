@@ -1,148 +1,92 @@
----
-status: ✅ IMPLEMENTED
-version: 1.0.0
-last_updated: 2026-04-18
----
-
 # Prompt: Evaluate Video Analyzer
 
-Video-specific evaluation overlay for Content Understanding video analyzers. Use alongside the core `evaluate-analyzer.prompt.md` for video-specific metrics and validation.
+Apply this overlay to [Evaluate Analyzer](evaluate-analyzer.prompt.md).
+Temporal alignment and object/event correctness are separate evaluations.
 
-> **Core eval workflow**: See `evaluate-analyzer.prompt.md` for scale/stability eval patterns, KPIs, and report template. This prompt adds video-specific guidance.
+## Bind the experiment
 
-## Iteration binding
+Use [iteration workspaces](../../docs/iteration-workspaces.md) and the selected
+`case\iterations\NNN`. Keep customer videos private. Freeze/hash videos and
+schemas; version reviewed truth, evaluator, duration source, timestamp parsing,
+and post-processing rules. Record hypothesis/baseline, expected/actual defects,
+verified bugs, held-out scope, and explicit cost approval.
 
-Apply [the v1 workspace guide](../../docs/iteration-workspaces.md). Read actual
-raw results from the selected `{iteration_folder}/outputs/raw/`, not a shared
-`result.json`. Write timestamp metrics, frame review, and post-processed
-derivatives to `outputs/evaluation/`; link them in the manifest and `report.md`.
-Preserve verified issue/iteration `bugs` links separately from local defect IDs;
-follow [tracking bugs](../../docs/iteration-workspaces.md#tracking-bugs).
-Never replace original timestamps with snapped ones. Inventory/hash video
-and schema inputs, version evaluator/truth, and record metric denominators,
-raw sources, scope, latency, retries/failures, and cost/status/basis.
+Read original native `.result.json` files under `outputs\raw\`. Do not assume
+a nested result envelope or guaranteed keyframe metadata. Write metrics,
+frame review, and transformed derivatives under `outputs\evaluation\`; never
+replace raw timestamps. Changed scope or scoring/transformation rules require
+a new numbered experiment.
 
-Different video scope, evaluator/post-processing rules, or metrics require a
-new numbered experiment with a baseline link. `--iterations N` is repeated
-trials within it. Keep customer videos private, sanitize all credentials/SAS
-queries, and obtain paid-run approval. Missing cost is unknown/null, not zero.
+## Timestamp checks
 
-## Video-Specific Eval Considerations
+1. Inspect the actual contents and available keyframe times, transcript, and
+   segment boundaries. Some saved formats expose `KeyFrameTimesMs`; do not
+   assume that field exists in every response.
+2. Parse the declared `hh:mm:ss.ms` format deterministically (for example
+   `00:00:06.375`), validating minutes/seconds, fractional precision, units,
+   and nonnegative values. Invalid or missing values are failures/unknowns,
+   not silently discarded or converted to zero.
+3. Compare against returned keyframe times **when present** and independently
+   checked source duration. Distinguish clip-relative, segment-relative, and
+   full-video time; apply only documented, versioned offsets.
+4. Report exact matches, near matches under a predeclared tolerance, invalid
+   times, out-of-bounds values, and nearest-keyframe distance. Missing
+   keyframes/duration means that check is unknown, not passed.
+5. Review source frames/video independently for whether the detected object
+   or event is actually present. A matching keyframe is not ground truth for
+   the detection or an unsampled true first appearance.
 
-### Timestamp Validation (Critical for Video)
+## Metrics
 
-Every video result includes `contents[].KeyFrameTimesMs` — validate generated timestamps against this ground truth:
+| Metric | Definition and denominator |
+|---|---|
+| Parse validity | Valid timestamps / all expected generated timestamp values |
+| Exact keyframe match | Exact matches / timestamps with keyframe evidence; also report missing evidence |
+| Out-of-bounds | Values outside verified time bounds / timestamps with valid time and bounds |
+| Keyframe distance | Distance in milliseconds over comparable timestamps; report excluded values |
+| Detection correctness/coverage | Reviewed supported detections and missed expected objects/events |
+| Temporal stability | Selected times, object membership, and count drift across planned trials |
 
-```python
-import json, re
+Set targets before the run. Zero out-of-bounds values or a 500 ms navigation
+tolerance can be useful goals, not universal measured guarantees. Compare
+short, medium, and long videos separately. Longer scope can expose omissions,
+coverage loss, or increased cost; do not extrapolate short-video accuracy or
+excuse lower counts without reviewing expected content.
 
-def parse_timestamp_to_ms(ts_str):
-    """Parse hh:mm:ss.ms to milliseconds."""
-    m = re.match(r'^(\d+):(\d+):(\d+)[.,](\d+)$', str(ts_str))
-    if m:
-        h, mn, s, frac = m.groups()
-        ms = int(frac.ljust(3, '0')[:3])
-        return int(h)*3600000 + int(mn)*60000 + int(s)*1000 + ms
-    return None
+For segmentation, verify boundaries and per-segment category/extraction
+correctness. Consult [Agents.md](../../Agents.md) and the selected API contract;
+do not assume document routing depth applies to video.
 
-# Select an actual raw result from this numbered experiment.
-raw_result_path = r"{iteration_folder}\outputs\raw\analysis\{actual_result_filename}"
-with open(raw_result_path) as f:
-    result = json.load(f)
+## Execution and file limitations
 
-for content in result["result"]["contents"]:
-    kf_times = set(content.get("KeyFrameTimesMs", []))
-    duration_ms = content.get("endTimeMs", 0)
+Use the official local-file commands in
+[Generate Video Analyzer](../skills/generate-analyzer-video.skill.md).
+Ordinary folder analysis uses native CLI concurrency; repeated or multi-analyzer
+trials use the cost-gated helper in [Eval CU](../skills/eval-cu.skill.md).
 
-    for field_name, field_val in content.get("fields", {}).items():
-        # Check arrays of objects with timestamp fields
-        if field_val.get("type") == "array":
-            for item in field_val.get("valueArray", []):
-                vo = item.get("valueObject", {})
-                for k, v in vo.items():
-                    ts_str = v.get("valueString", "")
-                    ts_ms = parse_timestamp_to_ms(ts_str)
-                    if ts_ms is not None:
-                        in_kf = ts_ms in kf_times
-                        exceeds = ts_ms > duration_ms
-                        if not in_kf or exceeds:
-                            print(f"  ISSUE: {k}={ts_str} KF={in_kf} Exceeds={exceeds}")
-```
+The verified CLI has no URL-input or configurable analysis-timeout option.
+Check current documented file/duration limits; do not prescribe a universal
+historical upload cutoff or a custom service-call fallback. If needed,
+prepare authorized smaller local clips as new immutable inputs with hashes,
+source offsets, changed scope, and fresh cost approval. Record blockers and
+uncertain completion before any resubmission.
 
-### Video-Specific KPIs
+## Optional post-processing
 
-| Metric | Description | Target |
-|--------|-------------|--------|
-| KF Match % | Timestamps matching a KeyFrameTimesMs value exactly | >90% (short), >85% (long) |
-| Exceeds % | Timestamps beyond video duration | 0% |
-| Avg KF Delta | Average distance from nearest keyframe (ms) | <500ms |
-| Object Count | Number of detected items per video | Use case dependent |
+Snapping/clamping is an explicitly versioned offline transformation only.
+Preserve raw values, record adjustment magnitudes and unsupported timestamps,
+and score raw versus transformed results separately. Invalid timestamps
+should be flagged/rejected for review rather than silently made plausible.
+When keyframes or duration are missing, do not pretend snapping was verified.
+Post-processing cannot establish detection correctness.
 
-State timestamp counts as denominators; keyframe alignment is not reviewed
-object/event correctness or STP evidence. Distinguish raw from post-processed
-metrics and report human-review/audit scope and held-out limitations.
+## Required outcome
 
-### Expected Accuracy by Video Length
+Complete report/manifest and root navigation with timestamp counts/sources,
+reviewed detections, coverage, failures/trials, raw/transformed comparisons,
+holdout/audit limitations, cost status/basis, and accept/reject/inconclusive
+decision. CLI status reports are not guaranteed usage/latency records; absent
+measurements remain unknown/null. Usage-based pricing is estimated.
 
-| Video Length | Expected KF Match | Expected Exceeds | Notes |
-|-------------|-------------------|-----------------|-------|
-| <1 min | 100% | 0% | Best accuracy range |
-| 1-5 min | 100% | 0% | Reliable |
-| 5-60 min | 100% | 0% | Tested on broadcasts up to 58 min |
-| >60 min | 95%+ | <1% | May need increased timeout |
-
-### Video Classification Limits
-
-**Videos support only 1 level of classification** (contentCategories). Unlike documents which support 5-6 levels of recursive classify-and-route, video classifiers:
-- Can segment a video into categories (e.g., news stories, ad breaks)
-- Can route each segment to one inner analyzer for field extraction
-- Cannot nest classifiers within classifiers for video content
-
-This is because video segmentation operates on temporal boundaries (keyframes, audio transitions) which don't have the same structural nesting that document pages do.
-
-### Video-Specific Analysis Checklist
-
-For scale evals:
-- [ ] All timestamps fall within video duration
-- [ ] Timestamps match keyframes (not interpolated)
-- [ ] Object detection is consistent with keyframe content
-- [ ] Segmentation boundaries are at natural breaks (topic changes, transitions)
-
-For stability evals:
-- [ ] Same objects detected across iterations
-- [ ] Timestamp values are deterministic (same keyframe selected)
-- [ ] Object count is stable (±10% across iterations)
-
-### Post-Processing Recommendations
-
-Always snap timestamps to nearest keyframe in production:
-
-```python
-def snap_to_keyframe(ts_ms, keyframe_times_ms, duration_ms):
-    """Clamp to duration and snap to nearest keyframe."""
-    if ts_ms is None:
-        return None
-    ts_ms = max(0, min(ts_ms, duration_ms))
-    if keyframe_times_ms:
-        return min(keyframe_times_ms, key=lambda k: abs(k - ts_ms))
-    return ts_ms
-```
-
-### Large Video Considerations
-
-- **Videos > 20 MB MUST use URL-based analysis via Azure Blob Storage SAS** — the local
-  binary upload path silently fails / times out above this size. Never attempt
-  `begin_analyze_binary` for files larger than ~20 MB; upload to blob and call
-  `begin_analyze_url(sas_url)` instead. When in doubt (e.g. mixed-size batch), always
-  default to blob URL — it works for any size and the per-call cost is identical.
-- Set timeout proportional to video length: ~30-40× video duration in seconds
-- CU API hard limit: 200MB file size (URL-based; verified to 446 MB in practice for
-  some deployments — confirm for your region)
-- See "Critical Rule: Videos > 20 MB Must Use Blob URL Upload" in
-  `.github/skills/generate-analyzer-video.skill.md` for the canonical pattern
-
-## See Also
-
-- Core eval workflow: `.github/prompts/evaluate-analyzer.prompt.md`
-- Video analyzer creation: `.github/skills/generate-analyzer-video.skill.md`
-- Write field descriptions: `.github/prompts/write_schema_fields.prompt.md`
+Keyframe alignment, stable counts, fill, and confidence alone do not prove
+case-level correctness or STP.

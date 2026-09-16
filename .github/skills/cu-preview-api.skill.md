@@ -1,105 +1,105 @@
 ---
 name: cu-preview-api
-description: Configures and tests Azure AI Content Understanding preview analyzers, including agentic workflows, explicit preview API versions, Studio bug-bash setup, and Southeast Asia test resources. Use when users ask for CU preview API, agentic mode, config.workflow Agentic, gpt-5.2 analyzers, preview compatibility testing, or the CU Studio bug bash.
+description: Validates and tests CU preview or Agentic schemas on an authorized resource using official cu, explicit API versions, a short compatibility smoke test, and cost gates.
 ---
 
 # Skill: CU Preview API
 
-Use this workflow only for preview-specific Content Understanding features. Keep the GA default unchanged.
+Use only for preview-specific capabilities. Keep the GA default unchanged.
+Follow [Agents.md](../../Agents.md) for the technical contract,
+[iteration workspaces](../../docs/iteration-workspaces.md) for evidence, and
+[Iterate Analyzer Schema](iterate-analyzer-schema.skill.md) for shared workflow.
 
-## Select an iteration
+## Resource and experiment
 
-Use [the canonical v1 workspace guide](../../docs/iteration-workspaces.md).
-Keep customer material private. Select `case/iterations/NNN` before creating
-schemas or outputs; snapshot schemas in `inputs/schemas/`, inventory/hash
-documents, and version truth/evaluator. Save raw responses under `outputs/raw/`,
-derived evaluation under `outputs/evaluation/`, and the evidence/cost decision
-in `report.md` and the iteration manifest. A smoke test and a broader corpus,
-or Standard and Agentic configurations, are separate numbered experiments.
-Trials from `--iterations N` remain within one experiment.
-Link verified product bugs in the root and relevant iteration `bugs` arrays,
-separately from local defects; follow [tracking bugs](../../docs/iteration-workspaces.md#tracking-bugs).
+Use your own authorized resource and the official CLI profile/environment
+configuration from [README](../../README.md). `CU_ENDPOINT`, `CU_API_KEY`, and
+`CU_API_VERSION` or saved profiles configure `cu`; it does not automatically
+load a repository `.env`. Never place keys, tokens, or signed URLs in command
+arguments, schemas, reports, or logs.
 
-Use official `cu` for routine operations when its installed flags support
-the requested contract; retain the validator for CU-Tools preview checks and
-the runners below for lifecycle, repeats, diagnostics, or bundle compatibility.
-They remain REST-based; installing the official CLI does not change them.
+Confirm preview/workflow/model availability on that resource. Do not assume
+a subscription, region, model deployment, or access grant. Inspect resource-wide
+model defaults before proposing any change; never replace them incidentally.
 
-## Studio test setup
+Select `case\iterations\NNN`, freeze/hash schema and sample inputs, and record
+hypothesis/baseline, expected/actual defects, bugs, truth/evaluator, and cost
+approval. Keep customer material private. A compatibility smoke and an expanded
+corpus are separate numbered scopes; repeats stay inside the chosen experiment.
 
-1. Open `https://aka.ms/custudiobugbash` and sign in.
-2. Select the Southeast Asia AI resource:
-   - Subscription: `MMI - Dev 01`
-   - Resource group: `mmi-usw3-studiotest`
-   - Resource: `mmi-southeastasia-resource`
-3. Save the resource setting.
-4. Create a custom analyzer project with a project name that identifies the tester and purpose.
-5. Configure project storage:
-   - Subscription: `MMI - Dev 02`
-   - Resource group: `mmi-eft-infra`
-   - Storage account: `mmicustudiotestwus3`
-   - Blob container: `bugbash`
-
-Never write keys, bearer tokens, SAS URLs, or `.env` contents into schemas, commands saved in the repository, logs, or reports.
-
-## Verified agentic contract
-
-The following contract was verified on the named Southeast Asia resource:
+## Agentic contract
 
 - API version: `2026-06-01-preview`
 - Completion model: `gpt-5.2`
-- Schema selector: `"config": { "workflow": "Agentic" }`
+- Selector: `config.workflow: "Agentic"` (case-sensitive)
 - One input file per analysis request
 
-Validate explicitly:
+Do not substitute another property when the contract is rejected. A CLI batch
+can contain several local files but must still send one file per request.
+
+## Offline validation
 
 ```powershell
+cu analyzer validate "{iteration_folder}\inputs\schemas\agentic.json" `
+  --api-version 2026-06-01-preview --spec
 python tools\cu-analyzer-validate\cu_analyzer_validator.py `
-  "{iteration_folder}\inputs\schemas\schema.json" `
+  "{iteration_folder}\inputs\schemas\agentic.json" `
   --api-version 2026-06-01-preview
 ```
 
-Create and test explicitly:
+These checks make no service calls. Fix errors and review warnings before
+running a short, non-sensitive, cost-approved smoke sample.
+
+## Explicit create and analyze
 
 ```powershell
-python tools\cu-analyzer-run\create_and_test.py `
-  --schema "{iteration_folder}\inputs\schemas\schema.json" `
-  --input <single-file> `
-  --output "{iteration_folder}\outputs\raw\analysis" `
-  --api-version 2026-06-01-preview `
-  --timeout 600
+cu analyzer create --name contract_agentic_001 `
+  --schema "{iteration_folder}\inputs\schemas\agentic.json" `
+  --api-version 2026-06-01-preview
 ```
 
-Run an existing analyzer explicitly:
+Stop if creation fails; use a fresh unique ID, not delete-and-replace.
+Only after successful creation:
 
 ```powershell
-python tools\cu-analyzer-run\run.py `
-  --analyzer-id <analyzer-id> `
-  --input <single-file> `
-  --output "{iteration_folder}\outputs\raw\analysis" `
-  --api-version 2026-06-01-preview `
-  --timeout 600
+cu analyze "{short_contract_path}" --analyzer contract_agentic_001 `
+  --api-version 2026-06-01-preview --json --yes --on-existing error `
+  --output-dir "{iteration_folder}\outputs\raw\smoke" `
+  --report-file "{iteration_folder}\outputs\raw\smoke-status.json"
 ```
 
-## Compatibility gate
+Apply `--profile NAME` consistently when using a named profile. After inspecting
+results and saving evidence, explicitly clean up only the actually-created,
+owned analyzer when authorized:
 
-Before paid scale or stability work:
+```powershell
+cu analyzer delete contract_agentic_001 --api-version 2026-06-01-preview
+```
 
-1. Validate with the preview API version.
-2. Use a short, non-sensitive sample for a create/analyze/delete smoke cycle.
-3. Confirm the result contains the expected fields and grounded source details.
-4. Record sanitized commands, tool/git/API/model versions, region, runtime
-   IDs, latency, tokens, successes/failures/retries, and cost status/basis.
-5. Obtain explicit cost approval before larger agentic runs.
+Deletion prompts by default; use `--yes` only for explicitly authorized cleanup.
+Never delete all planned IDs after an uncertain creation failure.
 
-Long contracts can exceed ten minutes. Treat timeout as a latency/capacity result, not as proof that the schema contract was rejected. Do not silently replace `config.workflow` with another preview property.
+## Compatibility and scale gate
 
-Account for every iteration, including failed/timed-out calls. Missing cost
-stays unknown/null, not zero; usage times prices is estimated, not measured
-charges. Link actual evidence, state incomplete results honestly, and refresh
-the root iteration index. A compatible smoke test is not evidence of STP.
+Verify the native result's expected fields and available grounding against
+reviewed truth. Record service acceptance, input/trial statuses, and observed
+IDs separately from extraction correctness. The CLI status report is not an
+accuracy report or guaranteed token/latency record.
 
-See `Agents.md` for authoritative API rules,
-`examples/05-Agentic-Contract-Obligations/` for broad preview testing, and
-`examples/06-Contract-Obligation-Golden-Set/` for a controlled Standard-vs-
-Agentic comparison on reviewed atomic obligations.
+Agentic runs can be substantially slower and more expensive. Long contracts
+may take more than ten minutes; a timeout is not proof of schema rejection.
+The verified CLI has no configurable analysis timeout option. Preserve
+incomplete evidence, assess incurred cost, and do not automatically resubmit.
+
+For repeats or Standard/Agentic comparisons use
+[Eval CU](eval-cu.skill.md), planning the exact model/schema/input matrix and
+cost cap first. Keep comparison fields and inputs fixed, snapshot each
+configuration, and fail missing results closed.
+
+Record every iteration's cost, including failed calls. Missing usage/charges
+remain unknown/null; usage-based pricing is estimated. Finish manifest/report
+and root navigation with limitations. A successful smoke test is not STP.
+
+Public examples:
+[Agentic contract obligations](../../examples/05-Agentic-Contract-Obligations/)
+and [reviewed obligation gold set](../../examples/06-Contract-Obligation-Golden-Set/).

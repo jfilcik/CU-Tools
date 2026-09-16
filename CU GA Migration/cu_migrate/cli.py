@@ -1,10 +1,4 @@
-"""Click CLI for cu-migrate.
-
-Commands:
-  inventory  — List analyzers and migration readiness
-  migrate    — Run Preview→GA migration (dry-run / export / apply)
-  report     — Generate reports from a previous migration run
-"""
+"""Offline inventory, migration planning and reports from official CLI exports."""
 
 from __future__ import annotations
 
@@ -14,99 +8,103 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from cu_migrate.client import CUClient
 from cu_migrate.executor import execute
-from cu_migrate.inventory import build_inventory
-from cu_migrate.models import MigrationReadiness, RunMode
-from cu_migrate.reports import write_reports
+from cu_migrate.inventory import build_inventory, load_sources
+from cu_migrate.models import RunMode
+from cu_migrate.reports import generate_report
 
 console = Console()
 
 
+def local_inputs(command):
+    command = click.option(
+        "--source-id", help="Explicit ID for one standalone definition that omits its analyzer ID",
+    )(command)
+    return click.option(
+        "--input", "-i", "inputs", multiple=True, required=True,
+        type=click.Path(exists=True, path_type=Path),
+        help="Local analyzer JSON export or directory of JSON exports; repeat for multiple inputs",
+    )(command)
+
+
 @click.group()
-@click.option("--endpoint", required=True, envvar="CU_ENDPOINT", help="CU resource endpoint URL")
-@click.option("--key", default=None, envvar="CU_KEY", help="Subscription key (omit for Entra ID)")
-@click.pass_context
-def main(ctx: click.Context, endpoint: str, key: str | None) -> None:
-    """CU Migrate — Azure Content Understanding Preview-to-GA migration assistant."""
-    ctx.ensure_object(dict)
-    ctx.obj["client"] = CUClient(endpoint=endpoint, subscription_key=key)
+def main() -> None:
+    """CU Migrate: OFFLINE Preview-to-GA schema planning.
+
+    Export analyzers and create reviewed replacements using the official cu CLI.
+    This tool never authenticates, connects to Azure, or deploys analyzers.
+    """
 
 
 @main.command()
-@click.pass_context
-def inventory(ctx: click.Context) -> None:
-    """List analyzers and their migration readiness."""
-    client: CUClient = ctx.obj["client"]
-    items = build_inventory(client)
-
-    table = Table(title="Analyzer Inventory")
-    table.add_column("Analyzer ID", style="bold")
-    table.add_column("Type")
-    table.add_column("Status")
-    table.add_column("Readiness")
-
-    readiness_style = {
-        MigrationReadiness.READY: "[green]✅ Ready[/green]",
-        MigrationReadiness.REVIEW_NEEDED: "[yellow]⚠️ Review[/yellow]",
-        MigrationReadiness.BLOCKED: "[red]❌ Blocked[/red]",
-    }
-
+@local_inputs
+@click.option("--include-prebuilt", is_flag=True, help="Include built-in analyzers in the inventory")
+@click.option("--json", "as_json", is_flag=True, help="Print inventory as JSON")
+def inventory(inputs: tuple[Path, ...], source_id: str | None, include_prebuilt: bool, as_json: bool) -> None:
+    """Inventory only the analyzers present in local exports."""
+    try:
+        items = build_inventory(load_sources(inputs, source_id), include_prebuilt)
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if as_json:
+        import json
+        click.echo(json.dumps([item.model_dump(mode="json") for item in items], indent=2))
+        return
+    table = Table(title="Local analyzer inventory (not service-validated)")
+    for name in ("Analyzer ID", "Type", "Definition", "Readiness"):
+        table.add_column(name)
     for item in items:
         table.add_row(
-            item.analyzer_id,
-            item.base_analyzer_type or "—",
-            item.status or "—",
-            readiness_style.get(item.migration_readiness, str(item.migration_readiness)),
+            item.analyzer_id, item.base_analyzer_type or "—",
+            "available" if item.definition_available else "list metadata only",
+            item.migration_readiness.value,
         )
-
     console.print(table)
-    console.print(f"\n[bold]Total:[/bold] {len(items)}  "
-                  f"[green]Ready:[/green] {sum(1 for i in items if i.migration_readiness == MigrationReadiness.READY)}  "
-                  f"[yellow]Review:[/yellow] {sum(1 for i in items if i.migration_readiness == MigrationReadiness.REVIEW_NEEDED)}  "
-                  f"[red]Blocked:[/red] {sum(1 for i in items if i.migration_readiness == MigrationReadiness.BLOCKED)}")
+    click.echo(f"Total local analyzers: {len(items)}. No service calls were made.")
 
 
-@main.command()
-@click.option("--analyzer", "-a", multiple=True, help="Analyzer ID(s) to migrate (omit for all)")
-@click.option("--mode", "-m", type=click.Choice(["dry_run", "export", "apply"]), default="dry_run", help="Execution mode")
-@click.option("--output", "-o", type=click.Path(), default="./cu_migration_output", help="Output directory for artifacts")
-@click.option("--yes", "-y", is_flag=True, help="Skip confirmation for apply mode")
-@click.pass_context
-def migrate(ctx: click.Context, analyzer: tuple[str, ...], mode: str, output: str, yes: bool) -> None:
-    """Run Preview→GA migration."""
-    client: CUClient = ctx.obj["client"]
-    run_mode = RunMode(mode)
-    output_dir = Path(output)
-    analyzer_ids = list(analyzer) if analyzer else None
-
-    if run_mode == RunMode.APPLY and not yes:
-        click.confirm(
-            "⚠️  Apply mode will CREATE new GA analyzers. Continue?",
-            abort=True,
+def _plan(
+    inputs: tuple[Path, ...], source_id: str | None, analyzer: tuple[str, ...],
+    mode: str, output: Path | None,
+) -> None:
+    try:
+        run = execute(
+            load_sources(inputs, source_id), list(analyzer) if analyzer else None,
+            RunMode(mode), output,
         )
-
-    console.print(f"[bold]Running migration[/bold] — mode: {run_mode.value}, scope: {len(analyzer_ids) if analyzer_ids else 'all'} analyzer(s)")
-
-    run = execute(client, analyzer_ids, run_mode, output_dir)
-
-    # Print summary
-    console.print(f"\n[bold green]✅ Passed:[/bold green] {run.success_count}")
-    console.print(f"[bold yellow]⚠️  Warnings:[/bold yellow] {run.warning_count}")
-    console.print(f"[bold red]❌ Failed:[/bold red] {run.failure_count}")
-
-    # Write reports
-    if run_mode in (RunMode.EXPORT, RunMode.APPLY, RunMode.DRY_RUN):
-        written = write_reports(run, output_dir)
-        console.print(f"\n[bold]Reports written:[/bold]")
-        for p in written:
-            console.print(f"  📄 {p}")
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if mode == RunMode.DRY_RUN.value:
+        click.echo(generate_report(run))
+        click.echo("Dry run: no files written. Use --mode export --output NEW_DIRECTORY to save a review bundle.")
+    else:
+        click.echo(f"Review bundle exported to: {output.resolve()}")
+        click.echo("Review migration_report.md and official_cu_commands.md. Nothing was deployed.")
+    click.echo(f"Offline checks: {run.success_count} passed, {run.warning_count} need review, {run.failure_count} failed.")
+    if run.failure_count:
+        raise click.ClickException(f"{run.failure_count} analyzer(s) failed migration checks; no create commands were generated for them")
 
 
 @main.command()
-@click.option("--analyzer", "-a", multiple=True, help="Analyzer ID(s) to report on (omit for all)")
-@click.option("--output", "-o", type=click.Path(), default="./cu_migration_output", help="Output directory")
-@click.pass_context
-def report(ctx: click.Context, analyzer: tuple[str, ...], output: str) -> None:
-    """Generate reports from a dry-run migration."""
-    ctx.invoke(migrate, analyzer=analyzer, mode="dry_run", output=output, yes=False)
+@local_inputs
+@click.option("--analyzer", "-a", multiple=True, help="Local analyzer ID to plan; repeat, or omit for all custom analyzers")
+@click.option("--mode", "-m", type=click.Choice(["dry_run", "export"]), default="dry_run", show_default=True)
+@click.option("--output", "-o", type=click.Path(path_type=Path), help="New output directory; required for export and forbidden for dry_run")
+def migrate(
+    inputs: tuple[Path, ...], source_id: str | None, analyzer: tuple[str, ...],
+    mode: str, output: Path | None,
+) -> None:
+    """Propose local GA schemas. dry_run writes nothing; export saves evidence."""
+    _plan(inputs, source_id, analyzer, mode, output)
+
+
+@main.command()
+@local_inputs
+@click.option("--analyzer", "-a", multiple=True, help="Local analyzer ID(s); omit for all custom analyzers")
+@click.option("--output", "-o", required=True, type=click.Path(path_type=Path), help="New review-bundle directory")
+def report(
+    inputs: tuple[Path, ...], source_id: str | None,
+    analyzer: tuple[str, ...], output: Path,
+) -> None:
+    """Generate a complete offline report bundle (same as migrate --mode export)."""
+    _plan(inputs, source_id, analyzer, RunMode.EXPORT.value, output)

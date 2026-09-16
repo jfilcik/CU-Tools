@@ -2,17 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from typing import Any, Optional, Tuple
-
-try:
-    from evallens.preprocessors import BasePreprocessor, preprocessor
-except ImportError:
-    BasePreprocessor = object
-
-    def preprocessor(**_kwargs):
-        return lambda cls: cls
-
+from typing import Any
 
 VALUE_KEYS = (
     "valueString",
@@ -63,27 +53,3 @@ def canonicalize_result(raw: dict[str, Any], doc_id: str = "") -> dict[str, Any]
         "contract_metadata": values.get("ContractMetadata", {}),
         "run_metadata": metadata,
     }
-
-
-@preprocessor(
-    name="normalize_cu_results",
-    description="Normalize native CU field nodes into contract prediction records",
-)
-class NormalizeCUResults(BasePreprocessor):
-    def process(
-        self,
-        predictions: str,
-        ground_truth: Optional[str] = None,
-    ) -> Tuple[str, Optional[str]]:
-        output = []
-        for line in predictions.splitlines():
-            if not line.strip():
-                continue
-            raw = json.loads(line)
-            output.append(
-                json.dumps(
-                    canonicalize_result(raw, raw.get("doc_id", "")),
-                    ensure_ascii=False,
-                )
-            )
-        return ("\n".join(output) + "\n" if output else "", ground_truth)

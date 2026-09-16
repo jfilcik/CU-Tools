@@ -1,6 +1,24 @@
 # Reports
 
-`evaluation/generate_accuracy_report.py` writes `overall_accuracy.md`, JSON, and CSV reports here. Generated reports are ignored until reviewed for source quotations and sensitive content.
+`evaluation/generate_broad_quality_report.py` and
+`evaluation/generate_clause_span_report.py` generate standalone Markdown, JSON,
+and CSV reports from official CLI status reports, saved `--json` CU results,
+and public CUAD annotations (older `metadata.json` bundles remain readable). Use
+`--output-prefix` or `--output`, respectively, to write new reports beneath
+ignored `test_results/`; review them for source quotations and sensitive content
+before sharing.
+
+The CLI status report does not contain usage or timing measurements. Missing
+measurements are explicitly unavailable, not zero; console `--usage`/`--time`
+output is not parsed. Keep `analyze-report.json` beside its result files.
+
+The retired private evaluation integration's weighted accuracy report is no
+longer generated. The standalone reports do not score atomic party roles or
+completeness.
+
+The files below preserve historical measurements, including their recorded
+region and workload facts. They are not prerequisites or default results for a
+new run.
 
 `heldout_20_quality.md` is the reviewed report from the 20-contract preview run.
 Its adjacent ignored JSON and CSV files contain machine-readable metrics without

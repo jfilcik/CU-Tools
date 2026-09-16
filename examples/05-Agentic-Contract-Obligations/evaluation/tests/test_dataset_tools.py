@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 import zipfile
 from pathlib import Path
 
 import pytest
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_DIR / "evaluation"))
 
 
 def _load(name: str, path: Path):
@@ -222,17 +224,36 @@ def test_clause_span_matching_is_category_aware():
     assert matches[0][2] >= 0.55
 
 
-def test_atomic_coverage_requires_verified_annotations(tmp_path):
-    manifest = tmp_path / "selection.json"
-    manifest.write_text(
-        json.dumps({"atomic_annotation_doc_ids": ["doc-1", "doc-2"]}),
+def test_grounding_viewer_maps_native_cli_outputs_and_skipped_rows(tmp_path):
+    result = tmp_path / "doc-1.pdf.json"
+    result.write_text(json.dumps({"contents": [{"fields": {}}]}), encoding="utf-8")
+    report = {
+        "schema": "cu-cli/analyze-report/v1",
+        "result_view": "full",
+        "analyzer": "cuad_unique",
+        "results": [
+            {"input": "doc-1.pdf", "output": str(result.resolve()), "status": "succeeded"},
+            {"input": "doc-2.pdf", "output": None, "status": "skipped"},
+        ],
+    }
+    (tmp_path / "analyze-report.json").write_text(json.dumps(report), encoding="utf-8")
+    files, outcomes = viewer.load_result_map([tmp_path])
+    assert files == {"doc-1": result.resolve()}
+    assert outcomes["doc-1"]["status"] == "success"
+    assert outcomes["doc-2"]["status"] == "failed"
+    assert viewer.result_content({"contents": [{"fields": {}}]}) == {"fields": {}}
+
+
+def test_grounding_viewer_uses_shared_recursive_discovery_and_source_metadata(tmp_path):
+    result = tmp_path / "nested" / "doc-1.pdf.result.json"
+    result.parent.mkdir()
+    result.write_text(
+        json.dumps({
+            "contents": [{"fields": {}}],
+            "_metadata": {"source_file": "original.pdf"},
+        }),
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="missing"):
-        _load(
-            "build_evallens",
-            PROJECT_DIR / "scripts" / "build_evallens_dataset.py",
-        ).validate_atomic_coverage(
-            manifest,
-            {"doc-1": {"doc_id": "doc-1", "review_status": "verified"}},
-        )
+    files, outcomes = viewer.load_result_map([tmp_path])
+    assert files == {"original": result}
+    assert outcomes == {}

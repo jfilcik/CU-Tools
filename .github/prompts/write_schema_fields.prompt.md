@@ -1,151 +1,78 @@
 # Prompt: Write Schema Fields
 
-## Goal
-
-Author or refine field descriptions, types, and examples for a Content Understanding analyzer schema.
+Author or refine CU field definitions from source evidence, not from desired
+sample answers. [Agents.md](../../Agents.md) owns technical rules;
+[Generate Analyzer Schema](generate-analyzer-schema.prompt.md) supplies the
+complete-schema context.
 
 ## Context
 
-- **Case / Iteration**: [Selected `case/iterations/NNN`]
-- **Hypothesis / Baseline / Defects**: [Manifest hypothesis, prior iteration ID, defect IDs]
-- **Tracking bugs**: [Verified issue/iteration `bugs`, separate from defect IDs; follow the [contract](../../docs/iteration-workspaces.md#tracking-bugs)]
-- **Current Schema**: [Path to existing schema or "new schema"]
-- **Fields to Add/Modify**: [List of fields]
-- **Known Issues**: [Any current problems with field extraction]
+- Selected `case\iterations\NNN`, hypothesis/baseline, and schema snapshot.
+- Fields to add/change and reviewed expected versus actual behavior.
+- Local defect IDs and verified tracking bugs.
+- Source text/layout evidence, document language, and selected API/modality.
 
-Use [the v1 workspace guide](../../docs/iteration-workspaces.md). Keep customer
-work private. Write candidate fields into the selected iteration's
-`inputs/schemas/` snapshot, never over a finished baseline. A changed schema
-or evaluation rule requires a new numbered experiment. Record exact changes
-and source evidence; examples must illustrate formats, not copy expected
-customer answers. Version/hash the final schema and evaluation inputs.
+Follow [iteration workspaces](../../docs/iteration-workspaces.md). Keep customer
+data private, freeze/hash inputs and schema, and version truth/evaluator rules.
+Write candidate definitions into the new iteration's `inputs\schemas\`; never
+overwrite a finished baseline.
 
-## Guidelines
+## Authoring checklist
 
-### Field Naming
-- Use PascalCase for top-level fields (e.g., `VendorName`, `InvoiceDate`)
-- Use descriptive names that clearly indicate content
-- Avoid abbreviations unless widely recognized
-- Keep names between 1-64 characters
+1. Use descriptive PascalCase field names and correct types: strings,
+   numbers, booleans, objects, or arrays of objects for repeated records.
+2. Explicitly choose `extract`, `generate`, or `classify` for the field's
+   purpose, within the selected modality/API contract.
+3. Define the semantic value and its text anchors: exact label variants,
+   section, party, row, and column. Avoid visual styling or position alone.
+4. Specify source formatting or justified normalization, plus absent/ambiguous
+   source behavior. Do not use another field as a fallback merely to fill it.
+5. Describe the intended meaning positively, adding focused exclusions for
+   confusable meanings such as due date versus issue date.
+6. Match the source language. Use representative format examples that are
+   not copied customer truth or literal sample answers.
+7. Keep document totals separate from repeated line items; compute
+   deterministic arithmetic downstream instead of asking extraction to guess.
+8. Request source/confidence when supported. Missing confidence is unknown,
+   and reported confidence does not establish correctness.
 
-### Field Types
-- `string` - text values
-- `number` - numeric values (integers or decimals)
-- `boolean` - true/false values
-- `array` - lists of items (use arrays of objects for structured data, not string fields requesting JSON)
-- `object` - nested structures with properties
+### Sparse summary fields
 
-### Method Selection
-Explicitly set the method for each field:
-- `extract` - Values appearing directly in content (only for document analyzers)
-- `generate` - Values requiring inference or summarization
-- `classify` - Selection from predefined options
+Inspect native saved layout content before choosing labels. If labels and
+values are separated in text order, use a label-relative description such as
+“the numeric value directly below `Gross Kgs` in the summary section.”
+Reading-order failure is a hypothesis to isolate, not something proved by a
+missing value with high confidence. See
+[field diagnostics](../skills/iterate-schema.skill.md).
 
-### Description Best Practices
-
-Write descriptions that follow Azure Content Understanding best practices:
-
-#### 1. Write Detailed Descriptions
-- **Include location hints**: "typically found at the top right corner", "in the header section"
-- **Specify format expectations**: "Format is usually MM/DD/YYYY", "alphanumeric with prefix"
-- **List alternative labels**: "May be labeled as 'Invoice Date', 'Billing Date', or 'Issue Date'"
-- **Provide examples**: "Examples: '01/15/2024', 'INV-2024-001', '$1,234.56'"
-
-#### 2. Include All Aliases
-List all possible names the field might appear under, especially for documents with diverse templates:
-- "Equal to the 'Distributions' column. Also disclosed as 'Realizations' or 'Realized Proceeds'."
-
-#### 3. Use Affirmative Language
-Describe what the field IS, not what it ISN'T:
-- ✅ "The date when goods or services were delivered, found in the delivery information section"
-- ❌ "This field isn't the invoice date and isn't the due date"
-
-#### 4. Match Language to Content
-Use the same language as your documents. For Italian invoices, use Italian field names and descriptions.
-
-#### 5. Reference Text Content, Not Visual Appearance
-- ✅ "Near the label 'Total:', in the summary section at bottom"
-- ❌ "The number in bold red text at the top right"
-
-#### 6. Anchor Summary/Footer Fields by Relative Position
-For values in summary rows, totals footers, or any region where labels and values appear in separate rows, explicitly describe the spatial relationship — OCR reading order may separate labels from values when the layout model fails to detect a `<table>`.
-- ✅ "The numeric value appearing **directly below** the 'Gross Kgs' label in the summary footer"
-- ❌ "The total gross weight"
-
-#### 7. Match the Exact Label in the Document
-Always confirm the label text by inspecting `.layout.md` output first. Paraphrased labels reduce extraction reliability.
-- ✅ `"labeled '# of Cartons'"` (matches document)
-- ❌ `"labeled 'Total Cartons'"` (paraphrase — document actually says `# of Cartons`)
-
-#### 8. Use Realistic Examples
-Examples that look nothing like real values bias the LLM toward the wrong format.
-- ✅ `"examples": ["180.82", "133.52"]` when real values are 2-decimal weights
-- ❌ `"examples": ["2459044"]` when real values are small decimals
-
-**Good Example**:
-```
-"description": "The date when the invoice was issued, typically found at the top right corner. May be labeled as 'Invoice Date', 'Billing Date', or 'Issue Date'. Format is usually MM/DD/YYYY or DD-MM-YYYY. Examples: '01/15/2024', '2024-01-15', 'January 15, 2024'."
-```
-
-**Poor Example**:
-```
-"description": "Invoice date"
-```
-
-### Examples
-Provide 2-3 canonical examples that show:
-- Typical values
-- Format expectations
-- Range of possibilities
-
-## Tasks
-
-1. For each field, write:
-   - Clear, specific description
-   - Appropriate type
-   - 2-3 example values
-   - Any validation rules or constraints
-
-2. Ensure consistency:
-   - Similar fields use similar phrasing
-   - Nested objects are properly structured
-   - Array items have clear schemas
-
-3. Review for clarity:
-   - Remove ambiguity
-   - Add context where needed
-   - Ensure descriptions are actionable
-
-## Output Format
-
-Provide JSON snippet with complete field definitions:
-
-Link the resulting schema from the iteration manifest. Keep diagnostics and
-comparisons in `outputs/evaluation/` and conclusions in `report.md`. A proposed
-field change is not a measured improvement: after an authorized run, record
-correctness with denominators/sources, protected-field regressions,
-failures/retries, and per-iteration cost/basis. Leave unmeasured metrics empty
-and unknown cost null; do not infer STP from fill/confidence.
+### Example definition
 
 ```json
 {
-  "FieldName": {
+  "InvoiceDate": {
     "type": "string",
     "method": "extract",
-    "description": "Clear, specific description of what to extract and where to find it.",
-    "examples": [
-      "Example 1",
-      "Example 2"
-    ]
+    "description": "The invoice issue date beside Invoice Date, Issued, or Date in the invoice header near the invoice identifier. Preserve the date format shown, such as MM/DD/YYYY or YYYY-MM-DD. Distinguish it from a payment due date; leave absent if no issue date is stated.",
+    "estimateSourceAndConfidence": true
   }
 }
 ```
 
-## Validation Checklist
+Generic examples may appear in descriptions; any separate schema property
+must be supported by the selected API. Do not add arbitrary validation or
+training-example properties to a service schema.
 
-- [ ] All fields have clear descriptions
-- [ ] Field types are appropriate
-- [ ] Examples are provided
-- [ ] No ambiguous language
-- [ ] Consistent style across fields
-- [ ] Edge cases are addressed
+## Output and verification
+
+Return complete JSON field definitions and a short rationale: evidence,
+expected benefit, ambiguity, and unchanged/protected behavior. Link the final
+schema snapshot in the iteration manifest and run both official offline
+validation and the local quality checks from
+[Generate Analyzer Schema](generate-analyzer-schema.prompt.md).
+
+A proposed description is not a measured improvement. Execute only through
+official `cu`, using [the iteration workflow](../skills/iterate-analyzer-schema.skill.md)
+for cost-approved tests and repeated comparisons. Preserve raw results, put
+derived diagnostics under `outputs\evaluation\`, and complete report/manifest
+with reviewed correctness, denominators, failures, cost/basis, and limitations.
+Missing measurements stay unknown; fill/confidence alone cannot establish STP.

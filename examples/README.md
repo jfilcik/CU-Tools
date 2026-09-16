@@ -11,10 +11,10 @@ customer repository or issue browser is optional.
 
 | Tutorial | What You'll Learn | Time |
 |----------|-------------------|------|
-| [01-API-Testing](01-API-Testing/) | Explore the CU REST API with HTTP test files in VS Code | 10 min |
+| [01-API-Testing](01-API-Testing/) | Explore CU with the official CLI | 10 min |
 | [02-Invoice-Extraction](02-Invoice-Extraction/) | Build a document analyzer using the agent-based workflow | 15 min |
 | [03-Video-Analysis](03-Video-Analysis/) | Build a video analyzer with keyframe-anchored timestamps | 15 min |
-| [05-Agentic-Contract-Obligations](05-Agentic-Contract-Obligations/) | Extract quote-grounded atomic obligations with the agentic preview API and evaluate against CUAD | 30+ min |
+| [05-Agentic-Contract-Obligations](05-Agentic-Contract-Obligations/) | Prepare public CUAD inputs and generate standalone offline broad-quality and clause-span reports | 30+ min |
 | [06-Contract-Obligation-Golden-Set](06-Contract-Obligation-Golden-Set/) | Compare Standard and Agentic extraction against reviewed atomic obligations | See tutorial |
 
 ## Recipes
@@ -28,14 +28,14 @@ Focused, self-contained fixes for specific problems:
 ## Prerequisites
 
 Live CU operations require a configured resource and credentials; see the
-[root Quick Start](../README.md#-quick-start). Copying the template and
+[root Quick Start](../README.md#quick-start). Copying the template and
 reviewing local evidence require no API calls.
 
 For execution:
-- Use the official `cu` executable for routine operations (Python 3.10+).
-- Advanced runner-based tutorials additionally require CU-Tools dependencies
-  and their `AZURE_AI_*` configuration. The runners load the root `.env`;
-  official `cu` uses `CU_*`/saved config and does not load that file.
+- Use the official `cu` executable for every CU operation (Python 3.10+).
+- Local planning/evaluation tutorials additionally need CU-Tools dependencies.
+  CU configuration belongs to official profiles/`CU_*` variables; the CLI does
+  not load the repository `.env`.
 - **GitHub Copilot** (recommended — the tutorials walk through the agent-assisted workflow)
 - Obtain explicit cost approval for paid scale/stability work.
 

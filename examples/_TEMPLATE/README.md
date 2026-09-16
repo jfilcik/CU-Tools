@@ -48,8 +48,9 @@ not zero.
    evaluator/version/configuration, corpus membership, and acceptance rules
    under the iteration's `inputs/`; link and hash them in its manifest.
 3. Replace the generic hypothesis and fill the case goals before execution.
-   Use `cu` for routine operations; use CU-Tools runners only for advanced
-   orchestration, repeats, diagnostics, or their result bundles.
+   Use official `cu` for every service operation. Use the offline schema
+   planner for dependencies and `cu-experiments` for immutable repeat/comparison
+   plans; ordinary folder batching goes directly through `cu analyze`.
 4. Obtain any required cost approval. Direct raw output to
    `iterations/001/outputs/raw/`, derived metrics/exports to
    `iterations/001/outputs/evaluation/`, and record exact sanitized commands

@@ -21,13 +21,14 @@ quality and cost toward safe straight-through processing.
 - For a new case, use `examples/_TEMPLATE/` and the iteration-workspace guide.
   Select the numbered iteration before any schema, analysis, or report work.
   Customer cases belong in private workspaces, not public CU-Tools.
-- For routine CU operations, invoke the official `cu` executable directly.
-  Do not create Python scripts or use the local `python -m cu_cli` wrapper
-  for tasks the official CLI already supports.
-- Keep `run.py` for advanced testing, diagnostics, and compatible run bundles;
-  keep `create_and_test.py` for lifecycle and classify-and-route orchestration.
-  Follow `Agents.md` section "CLI-first operation routing" for the boundary,
-  configuration differences, and safe update behavior.
+- Invoke the official `cu` executable for every CU service operation.
+  Do not add a CU REST/SDK client, authentication layer, polling loop, or
+  general-purpose command wrapper.
+- Use `cu-experiments` only for immutable repeated trials/analyzer comparisons;
+  ordinary concurrent folder analysis belongs directly to `cu analyze`.
+  Use the offline `cu-schema-plan` helper for dependency ordering and
+  snapshots, then execute reviewed official CLI commands explicitly.
+  Follow `Agents.md` section "CLI-only operation routing" for boundaries.
 - For installation and updates, use the official package workflow in
   `README.md`; a local toolkit checkout is a developer option, not a prerequisite.
 - Standard single document type analyzer work:
@@ -47,8 +48,10 @@ For video, route to the video skill which covers keyframe-anchored timestamps, s
 ## Behavior Expectations
 
 - Follow existing repo conventions and keep changes modular and testable.
-- Prefer small composable Python tools only for workflows the official CLI
-  does not cover; reuse existing runners before adding new wrappers.
+- Prefer small composable offline tools for work the official CLI does not
+  cover; reuse the task-specific helpers rather than adding another runner.
+- Treat unknown cost, usage, latency, missing results, and unsupported CLI
+  capabilities explicitly. A local plan or dry-run is not service validation.
 - Use plan -> implement -> validate for all non-trivial work.
 - Prefer creating new schema versions instead of in-place replacement unless the user asks otherwise.
 - Record one coherent hypothesis per numbered experiment, preserve raw
@@ -75,5 +78,5 @@ For video, route to the video skill which covers keyframe-anchored timestamps, s
 - Advanced classify-and-route skill: `.github/skills/generate-analyzer-classify-route.skill.md`
 - Eval skill: `.github/skills/eval-cu.skill.md`
 - Preview API skill: `.github/skills/cu-preview-api.skill.md`
-- Troubleshooting: `.github/TROUBLESHOOTING.md`
+- Command troubleshooting: installed `cu --help` and the affected tool README
 - Getting started: `README.md` (Quick Start)

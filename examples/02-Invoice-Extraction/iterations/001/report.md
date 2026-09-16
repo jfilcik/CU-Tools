@@ -32,7 +32,7 @@ claimed as evidence for this experiment.
    exports in `outputs/evaluation/`, and link actual files in the manifest.
 
 Use official `cu` for simple calls; use the existing CU-Tools runners for
-repeats, lifecycle orchestration, diagnostics, or their compatible output
+repeats, lifecycle orchestration, usage summaries, or their compatible output
 bundles. Follow the [workspace guide](../../../../docs/iteration-workspaces.md).
 
 ## Results and cost

@@ -3,32 +3,41 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
 import statistics
+import sys
 import unicodedata
 from collections import Counter
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
-from pathlib import Path
-from typing import Any, Iterable
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from typing import Any
+from uuid import uuid4
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
+RESULT_TOOLS = PROJECT_DIR.parents[1] / "tools" / "cu-results-export"
+if str(RESULT_TOOLS) not in sys.path:
+    sys.path.insert(0, str(RESULT_TOOLS))
+
+from cu_result_io import (  # noqa: E402
+    ResultFormatError,
+    decoded_value,
+    load_results,
+    result_payload,
+    result_status,
+    result_usage,
+)
+
 DEFAULT_GOLD = PROJECT_DIR / "ground_truth" / "golden_obligations.jsonl"
 DEFAULT_SAMPLES = PROJECT_DIR / "samples" / "downloaded"
 DEFAULT_OUTPUT = PROJECT_DIR / "evaluation" / "output"
 MATCH_THRESHOLD = 0.55
-
-VALUE_KEYS = (
-    "valueString",
-    "valueNumber",
-    "valueInteger",
-    "valueBoolean",
-    "valueDate",
-    "valueTime",
-    "valueCurrency",
-    "valueAddress",
-    "valueCountryRegion",
+MEASUREMENTS = (
+    "elapsed_seconds", "input_tokens", "output_tokens",
+    "contextualization_tokens", "document_pages",
 )
 
 
@@ -49,39 +58,30 @@ def get_value(record: dict[str, Any], *names: str, default: Any = "") -> Any:
 
 
 def unwrap_field(node: Any) -> Any:
-    if not isinstance(node, dict):
-        return node
-    if "valueArray" in node:
-        return [unwrap_field(item) for item in node["valueArray"]]
-    if "valueObject" in node:
-        return {
-            name: unwrap_field(value)
-            for name, value in node["valueObject"].items()
-        }
-    for key in VALUE_KEYS:
-        if key in node:
-            return node[key]
-    if "value" in node:
-        return node["value"]
-    return {
-        name: unwrap_field(value)
-        for name, value in node.items()
-        if name
-        not in {"type", "confidence", "source", "spans", "boundingRegions"}
-    }
+    return decoded_value(node)
 
 
 def canonicalize_result(raw: dict[str, Any]) -> dict[str, Any]:
-    result = raw.get("result", raw)
-    contents = result.get("contents", []) if isinstance(result, dict) else []
-    content = contents[0] if contents else result
-    fields = content.get("fields", {}) if isinstance(content, dict) else {}
+    result = result_payload(raw)
+    if "contents" in result:
+        contents = result["contents"]
+        if len(contents) != 1 or "fields" in result:
+            raise ResultFormatError("Expected one contract content entry per result")
+        fields = contents[0].get("fields", {})
+    else:
+        fields = result.get("fields", {})
+    if not {"Parties", "Obligations"} & fields.keys():
+        raise ResultFormatError("Result has no Parties or Obligations fields")
     values = {name: unwrap_field(value) for name, value in fields.items()}
-    parties = values.get("Parties", [])
-    obligations = values.get("Obligations", [])
+    for name in ("Parties", "Obligations"):
+        value = values.get(name, [])
+        if value is None:
+            values[name] = []
+        elif not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+            raise ResultFormatError(f"{name} must be an array of objects or null")
     return {
-        "parties": parties if isinstance(parties, list) else [],
-        "obligations": obligations if isinstance(obligations, list) else [],
+        "parties": values.get("Parties", []),
+        "obligations": values.get("Obligations", []),
     }
 
 
@@ -91,48 +91,249 @@ def load_gold(path: Path) -> list[dict[str, Any]]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    if len({record["doc_id"] for record in records}) != len(records):
-        raise ValueError(f"Duplicate doc_id in golden set: {path}")
+    expected_sources(records)
     return records
 
 
-def result_doc_id(document_name: str) -> str:
-    return Path(document_name).stem
-
-
-def load_run(results_dir: Path) -> dict[str, dict[str, Any]]:
-    metadata_path = results_dir / "metadata.json"
-    if not metadata_path.is_file():
-        raise FileNotFoundError(f"Run metadata not found: {metadata_path}")
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    run = {}
-    for item in metadata.get("results", []):
-        doc_id = result_doc_id(item.get("document", ""))
-        record = {
-            "doc_id": doc_id,
-            "status": item.get("status", "failed"),
-            "error": item.get("error", ""),
-            "elapsed_seconds": item.get("elapsed_seconds"),
-            "input_tokens": item.get("input_tokens", 0),
-            "output_tokens": item.get("output_tokens", 0),
-            "contextualization_tokens": item.get("contextualization_tokens", 0),
-            "document_pages": item.get("document_pages", 0),
-            "prediction": {"parties": [], "obligations": []},
-        }
-        result_file = item.get("result_file")
-        if record["status"] == "success" and result_file:
-            raw_path = results_dir / result_file
-            if raw_path.is_file():
-                raw = json.loads(raw_path.read_text(encoding="utf-8"))
-                record["prediction"] = canonicalize_result(raw)
+def relative_identity(value: Any, root: Path | None = None) -> str:
+    """Keep the full input-relative path and extension; never match by stem."""
+    if not isinstance(value, str) or not value.strip():
+        raise ResultFormatError("Input identity must be a nonempty path")
+    text = value.replace("\\", "/")
+    path = PurePosixPath(text)
+    if ".." in path.parts or ":" in text and not PureWindowsPath(text).drive:
+        raise ResultFormatError(f"Unsafe input identity: {value}")
+    absolute = path.is_absolute() or bool(PureWindowsPath(text).drive)
+    if absolute:
+        if root is None:
+            raise ResultFormatError(f"Expected a relative input identity: {value}")
+        try:
+            if PureWindowsPath(text).drive:
+                path = PurePosixPath(
+                    PureWindowsPath(text).relative_to(PureWindowsPath(root.resolve())).as_posix()
+                )
             else:
-                record["status"] = "failed"
-                record["error"] = f"Missing result file: {raw_path.name}"
-        run[doc_id] = record
-    return {
-        "metadata": metadata,
-        "documents": run,
+                path = path.relative_to(PurePosixPath(root.resolve().as_posix()))
+        except ValueError as exc:
+            raise ResultFormatError(f"Input is outside {root}: {value}") from exc
+    if not path.parts or path.is_absolute():
+        raise ResultFormatError(f"Invalid input identity: {value}")
+    return path.as_posix()
+
+
+def expected_sources(gold_records: list[dict[str, Any]]) -> dict[str, str]:
+    if not gold_records:
+        raise ValueError("The golden set must not be empty")
+    sources = {}
+    seen_ids = set()
+    for gold in gold_records:
+        doc_id = relative_identity(gold["doc_id"])
+        source = relative_identity(gold.get("source_file", f"{doc_id}.txt"))
+        if doc_id.casefold() in seen_ids or source.casefold() in sources:
+            raise ValueError(f"Duplicate golden-set document or source: {doc_id}")
+        seen_ids.add(doc_id.casefold())
+        sources[source.casefold()] = gold["doc_id"]
+    return sources
+
+
+def source_identity(value: Any, root: Path, expected: dict[str, str]) -> str:
+    source = relative_identity(value, root)
+    if source.casefold() not in expected:
+        # CLI reports may record a repository-relative path, rather than an
+        # absolute path or a path relative to --source.
+        candidate = Path(str(value).replace("\\", "/")).resolve()
+        source = relative_identity(str(candidate), root)
+    if source.casefold() not in expected:
+        raise ResultFormatError(f"Unrelated result input: {value}")
+    return source
+
+
+def output_identity(value: Any, root: Path) -> str:
+    relative = relative_identity(value, root)
+    try:
+        candidate = Path(str(value).replace("\\", "/")).resolve().relative_to(root.resolve())
+    except ValueError:
+        return relative
+    return relative_identity(candidate.as_posix())
+
+
+def measurement(value: Any, name: str) -> int | float | None:
+    if value is None:
+        return None
+    if (
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        or not math.isfinite(value) or value < 0
+        or name != "elapsed_seconds" and value != int(value)
+    ):
+        raise ResultFormatError(f"Invalid numeric measurement {name}: {value!r}")
+    return value
+
+
+def measurements(raw: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
+    metadata = raw.get("_metadata", {})
+    values = {
+        name: measurement(item.get(name, metadata.get(name)), name)
+        for name in MEASUREMENTS
     }
+    usage = result_usage(raw) or {}
+    tokens = usage.get("tokens")
+    if tokens is not None:
+        if not isinstance(tokens, dict):
+            raise ResultFormatError("usage.tokens must be an object")
+        for direction in ("input", "output"):
+            entries = [
+                measurement(value, f"{direction}_tokens")
+                for key, value in tokens.items() if key.endswith(f"-{direction}")
+            ]
+            if values[f"{direction}_tokens"] is None and entries and None not in entries:
+                values[f"{direction}_tokens"] = sum(entries)
+    for target, source in (
+        ("contextualization_tokens", "contextualizationTokens"),
+        ("document_pages", "documentPages"),
+    ):
+        if values[target] is None:
+            values[target] = measurement(usage.get(source), target)
+    return values
+
+
+def load_run(
+    results_dir: Path,
+    gold_records: list[dict[str, Any]],
+    samples_dir: Path,
+    report_path: Path | None = None,
+) -> dict[str, Any]:
+    """Read native results plus an optional CLI report, or a saved legacy run."""
+    expected = expected_sources(gold_records)
+    loaded = load_results(results_dir)
+    if not results_dir.is_dir():
+        raise ResultFormatError("A benchmark run must be a result directory")
+    legacy_path = results_dir / "metadata.json"
+    native_path = report_path or results_dir / "report.json"
+    if legacy_path.is_file() and (report_path is not None or native_path.is_file()):
+        raise ResultFormatError("Do not mix a legacy run manifest with a CLI report")
+    manifest_path = legacy_path if legacy_path.is_file() else native_path
+    metadata: dict[str, Any] = {}
+    if manifest_path.is_file():
+        metadata = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+        if not isinstance(metadata, dict) or not isinstance(metadata.get("results"), list):
+            raise ResultFormatError(f"Invalid run manifest: {manifest_path}")
+        if manifest_path != legacy_path and metadata.get("schema") != "cu-cli/analyze-report/v1":
+            raise ResultFormatError(f"Unrecognized CLI report schema: {manifest_path}")
+        if manifest_path != legacy_path:
+            if metadata.get("result_view") != "full":
+                raise ResultFormatError("CLI report must describe --json full results")
+            counts = metadata.get("counts")
+            if not isinstance(counts, dict) or any(not isinstance(row, dict) for row in metadata["results"]):
+                raise ResultFormatError("Invalid CLI report counts or rows")
+            expected_counts = {
+                state: sum(row.get("status") == state for row in metadata["results"])
+                for state in ("succeeded", "failed", "skipped")
+            }
+            expected_counts["total"] = len(metadata["results"])
+            if any(type(counts.get(key)) is not int or counts[key] != value for key, value in expected_counts.items()):
+                raise ResultFormatError("CLI report counts disagree with its input rows")
+    elif report_path is not None:
+        raise FileNotFoundError(f"CLI report not found: {report_path}")
+
+    legacy = manifest_path == legacy_path
+    rows = {}
+    files = {}
+    for item in metadata.get("results", []):
+        if not isinstance(item, dict):
+            raise ResultFormatError("Run manifest rows must be objects")
+        source = source_identity(item.get("document" if legacy else "input"), samples_dir, expected)
+        doc_id = expected[source.casefold()]
+        if doc_id in rows:
+            raise ResultFormatError(f"Duplicate manifest input: {source}")
+        allowed = {"success", "failed"} if legacy else {"succeeded", "failed", "skipped"}
+        if item.get("status") not in allowed:
+            raise ResultFormatError(f"Unrecognized manifest status for {source}")
+        output = item.get("result_file" if legacy else "output")
+        if output:
+            output = output_identity(output, results_dir)
+            if output.casefold() in files:
+                raise ResultFormatError(f"Duplicate manifest result file: {output}")
+            files[output.casefold()] = doc_id
+        rows[doc_id] = {**item, "source_file": source, "result_file": output}
+
+    actual = {}
+    for raw in loaded:
+        local = raw["_metadata"]
+        file_name = relative_identity(local["result_file"])
+        if file_name.lower().endswith(".result.json"):
+            source = source_identity(file_name[:-len(".result.json")], samples_dir, expected)
+            for name in ("document", "source_file"):
+                if name in local and source_identity(local[name], samples_dir, expected).casefold() != source.casefold():
+                    raise ResultFormatError(f"Conflicting source identity in {file_name}")
+            doc_id = expected[source.casefold()]
+        elif "document" in local:
+            source = source_identity(local["document"], samples_dir, expected)
+            doc_id = expected[source.casefold()]
+        elif file_name.casefold() in files:
+            doc_id = files[file_name.casefold()]
+            source = rows[doc_id]["source_file"]
+        else:
+            source = source_identity(local["source_file"], samples_dir, expected)
+            doc_id = expected[source.casefold()]
+        if doc_id in actual:
+            raise ResultFormatError(f"Duplicate result input: {source}")
+        if metadata:
+            row = rows.get(doc_id)
+            if row is None or row.get("result_file") and row["result_file"].casefold() != file_name.casefold():
+                raise ResultFormatError(f"Result is not the manifest output for {source}")
+        status = result_status(raw)
+        if status is not None and status.lower() not in {
+            "succeeded", "success", "failed", "canceled", "cancelled", "running", "notstarted",
+        }:
+            raise ResultFormatError(f"Unrecognized result status: {status}")
+        failed = (
+            status is not None and status.lower() not in {"succeeded", "success"}
+            or bool(raw.get("error") or result_payload(raw).get("error"))
+        )
+        actual[doc_id] = {
+            "raw": raw, "source_file": source, "result_file": file_name,
+            "status": "failed" if failed else "success",
+            "service_status": status,
+            "prediction": {"parties": [], "obligations": []} if failed else canonicalize_result(raw),
+        }
+
+    run = {}
+    for source, doc_id in expected.items():
+        result = actual.get(doc_id, {})
+        item = rows.get(doc_id, {})
+        succeeded = result.get("status") == "success" and (
+            not metadata or item.get("status") in {"success", "succeeded"}
+        )
+        run[doc_id] = {
+            "doc_id": doc_id,
+            "source_file": result.get("source_file", item.get("source_file", source)),
+            "result_file": result.get("result_file", item.get("result_file")),
+            "status": "success" if succeeded else "failed",
+            "service_status": result.get("service_status"),
+            "report_status": item.get("status"),
+            "error": "" if succeeded else item.get("error") or item.get("reason")
+            or "Missing, failed, or uncompleted expected result",
+            **measurements(result.get("raw", {}), item),
+            "prediction": result["prediction"] if succeeded else {"parties": [], "obligations": []},
+        }
+
+    metadata = dict(metadata)
+    metadata["result_directory"] = str(results_dir)
+    metadata["result_format"] = "legacy" if legacy else "native"
+    for name, payload_key, report_key in (
+        ("analyzer_id", "analyzerId", "analyzer"),
+        ("api_version", "apiVersion", "api_version"),
+    ):
+        values = {
+            result_payload(raw).get(payload_key) for raw in loaded
+            if result_payload(raw).get(payload_key)
+        }
+        if metadata.get(name) or metadata.get(report_key):
+            values.add(metadata.get(name) or metadata[report_key])
+        if len(values) > 1:
+            raise ResultFormatError(f"Mixed {name} values in one benchmark run")
+        metadata[name] = next(iter(values), None)
+    return {"metadata": metadata, "documents": run}
 
 
 def evidence_quotes(obligation: dict[str, Any]) -> list[str]:
@@ -260,7 +461,7 @@ def scalar_similarity(left: Any, right: Any) -> float:
 
 
 def party_names(party: dict[str, Any]) -> list[str]:
-    aliases = get_value(party, "Aliases", "aliases", default=[])
+    aliases = get_value(party, "Aliases", "aliases", default=[]) or []
     if isinstance(aliases, str):
         aliases = [aliases]
     legal_name = get_value(party, "LegalName", "legal_name")
@@ -336,9 +537,9 @@ def safe_rate(numerator: int, denominator: int) -> float:
     return numerator / denominator if denominator else 0.0
 
 
-def percentile(values: list[float], fraction: float) -> float:
+def percentile(values: list[float], fraction: float) -> float | None:
     if not values:
-        return 0.0
+        return None
     ordered = sorted(values)
     index = max(0, min(len(ordered) - 1, math.ceil(fraction * len(ordered)) - 1))
     return ordered[index]
@@ -486,7 +687,11 @@ def evaluate_document(
     duplicates = duplicate_count(predicted)
     return {
         "doc_id": gold["doc_id"],
+        "source_file": run_record.get("source_file") if run_record else None,
+        "result_file": run_record.get("result_file") if run_record else None,
         "status": run_record["status"] if run_record else "failed",
+        "service_status": run_record.get("service_status") if run_record else None,
+        "report_status": run_record.get("report_status") if run_record else None,
         "error": run_record.get("error", "") if run_record else "No run record",
         "gold_count": len(gold_obligations),
         "predicted_count": len(predicted),
@@ -510,8 +715,8 @@ def evaluate_document(
         "quote_count": len(all_quotes),
         "grounded_quote_count": grounded,
         "elapsed_seconds": run_record.get("elapsed_seconds") if run_record else None,
-        "input_tokens": run_record.get("input_tokens", 0) if run_record else 0,
-        "output_tokens": run_record.get("output_tokens", 0) if run_record else 0,
+        "input_tokens": run_record.get("input_tokens") if run_record else None,
+        "output_tokens": run_record.get("output_tokens") if run_record else None,
         "matched_details": matched_details,
         "false_positives": [
             {
@@ -554,8 +759,6 @@ def aggregate(mode: str, documents: list[dict[str, Any]], metadata: dict[str, An
             "required_detail_total",
             "quote_count",
             "grounded_quote_count",
-            "input_tokens",
-            "output_tokens",
         ):
             totals[key] += document[key]
     precision = safe_rate(totals["matched_count"], totals["predicted_count"])
@@ -571,12 +774,25 @@ def aggregate(mode: str, documents: list[dict[str, Any]], metadata: dict[str, An
         for doc in completed
         if isinstance(doc["elapsed_seconds"], (int, float))
     ]
+    all_latencies = [doc["elapsed_seconds"] for doc in documents if doc["elapsed_seconds"] is not None]
+    full_latency = bool(completed) and len(latencies) == len(completed)
+    measured = {
+        key: [doc[key] for doc in documents if doc[key] is not None]
+        for key in ("input_tokens", "output_tokens")
+    }
+    token_totals = {
+        key: sum(values) if values and len(values) == len(documents) else None
+        for key, values in measured.items()
+    }
+    total_input, total_output = token_totals["input_tokens"], token_totals["output_tokens"]
     matched_count = totals["matched_count"]
     return {
         "mode": mode,
         "run_id": metadata.get("run_id", ""),
         "api_version": metadata.get("api_version", ""),
         "analyzer_id": metadata.get("analyzer_id", ""),
+        "result_directory": metadata.get("result_directory"),
+        "result_format": metadata.get("result_format"),
         "document_count": len(documents),
         "completed_count": len(completed),
         "completion_rate": safe_rate(len(completed), len(documents)),
@@ -614,15 +830,24 @@ def aggregate(mode: str, documents: list[dict[str, Any]], metadata: dict[str, An
         "duplicate_rate": safe_rate(
             totals["duplicate_count"], totals["predicted_count"]
         ),
-        "total_input_tokens": totals["input_tokens"],
-        "total_output_tokens": totals["output_tokens"],
-        "total_tokens": totals["input_tokens"] + totals["output_tokens"],
+        "total_input_tokens": total_input,
+        "total_output_tokens": total_output,
+        "total_tokens": total_input + total_output if total_input is not None and total_output is not None else None,
+        "observed_input_tokens": sum(measured["input_tokens"]) if measured["input_tokens"] else None,
+        "observed_output_tokens": sum(measured["output_tokens"]) if measured["output_tokens"] else None,
+        "measurement_coverage": {
+            "input_tokens": len(measured["input_tokens"]),
+            "output_tokens": len(measured["output_tokens"]),
+            "elapsed_seconds": len(all_latencies),
+            "completed_elapsed_seconds": len(latencies),
+            "expected_documents": len(documents),
+        },
         "latency_seconds": {
-            "mean": statistics.fmean(latencies) if latencies else 0.0,
-            "p50": statistics.median(latencies) if latencies else 0.0,
-            "p95": percentile(latencies, 0.95),
-            "max": max(latencies, default=0.0),
-            "total": sum(latencies),
+            "mean": statistics.fmean(latencies) if full_latency else None,
+            "p50": statistics.median(latencies) if full_latency else None,
+            "p95": percentile(latencies, 0.95) if full_latency else None,
+            "max": max(latencies) if full_latency else None,
+            "total": sum(all_latencies) if all_latencies and len(all_latencies) == len(documents) else None,
         },
         "documents": documents,
     }
@@ -633,12 +858,15 @@ def evaluate_mode(
     gold_records: list[dict[str, Any]],
     samples_dir: Path,
     results_dir: Path,
+    report_path: Path | None = None,
 ) -> dict[str, Any]:
-    run = load_run(results_dir)
+    run = load_run(results_dir, gold_records, samples_dir, report_path)
     documents = []
     for gold in gold_records:
-        source_path = samples_dir / f"{gold['doc_id']}.txt"
+        source_path = samples_dir / relative_identity(gold.get("source_file", f"{gold['doc_id']}.txt"))
         source_text = source_path.read_text(encoding="utf-8")
+        if gold.get("source_sha256") and hashlib.sha256(source_text.encode("utf-8")).hexdigest() != gold["source_sha256"]:
+            raise ValueError(f"Source checksum mismatch: {source_path}")
         documents.append(
             evaluate_document(
                 gold,
@@ -653,8 +881,16 @@ def fmt_percent(value: float) -> str:
     return f"{value:.1%}"
 
 
-def fmt_number(value: float) -> str:
-    return f"{value:,.1f}"
+def fmt_number(value: float | None) -> str:
+    return "unknown" if value is None else f"{value:,.1f}"
+
+
+def fmt_tokens(value: int | None) -> str:
+    return "unknown" if value is None else f"{value:,}"
+
+
+def measured_ratio(numerator: float | None, denominator: float | None) -> float | None:
+    return numerator / denominator if numerator is not None and denominator else None
 
 
 def comparison_conclusion(standard: dict[str, Any], agentic: dict[str, Any]) -> str:
@@ -696,42 +932,12 @@ def write_report(
             encoding="utf-8"
         )
     )
-    qualitative_path = PROJECT_DIR / "evaluation" / "qualitative_review.json"
-    qualitative = (
-        json.loads(qualitative_path.read_text(encoding="utf-8"))
-        if qualitative_path.is_file()
-        else {}
+    latency_ratio = measured_ratio(
+        agentic["latency_seconds"]["mean"], standard["latency_seconds"]["mean"]
     )
-    latency_ratio = (
-        agentic["latency_seconds"]["mean"] / standard["latency_seconds"]["mean"]
-        if standard["latency_seconds"]["mean"]
-        else 0.0
+    token_ratio = measured_ratio(
+        agentic["total_tokens"], standard["total_tokens"]
     )
-    token_ratio = (
-        agentic["total_tokens"] / standard["total_tokens"]
-        if standard["total_tokens"]
-        else 0.0
-    )
-    qualitative_lines = []
-    if qualitative:
-        verdict = qualitative["verdict"]
-        qualitative_lines = [
-            "## Independent qualitative review",
-            "",
-            f"**{verdict['headline']}**",
-            "",
-            f"- Demo: {verdict['demo_assessment']}",
-            f"- Production: {verdict['production_assessment']}",
-            "",
-            *[
-                f"- {finding}"
-                for finding in qualitative.get("report_findings", [])
-            ],
-            "",
-            "See [`evaluation/qualitative_review.md`](evaluation/qualitative_review.md) "
-            "for the source-level review of every Agentic miss and unmatched prediction.",
-            "",
-        ]
     lines = [
         "# Standard vs. Agentic contract-obligation benchmark",
         "",
@@ -739,15 +945,17 @@ def write_report(
         "",
         "## Benchmark design",
         "",
-        "- Test resource region: Southeast Asia.",
-        f"- Standard run: `{standard['run_id']}` ({standard['api_version']}).",
-        f"- Agentic run: `{agentic['run_id']}` ({agentic['api_version']}).",
-        "- Golden set: 10 independently annotated short CUAD contracts.",
+        f"- Standard run ID: `{standard['run_id'] or 'not recorded'}`; API: `{standard['api_version'] or 'not recorded'}`.",
+        f"- Agentic run ID: `{agentic['run_id'] or 'not recorded'}`; API: `{agentic['api_version'] or 'not recorded'}`.",
+        f"- Standard inputs: `{standard.get('result_directory')}` ({standard.get('result_format')}).",
+        f"- Agentic inputs: `{agentic.get('result_directory')}` ({agentic.get('result_format')}).",
+        f"- Golden set: {standard['document_count']} independently annotated short CUAD contracts.",
         f"- Gold obligations: {standard['gold_obligations']}.",
         "- Standard: GA API with `gpt-4.1` and no Agentic workflow selector.",
         "- Agentic: `2026-06-01-preview`, `gpt-5.2`, and `config.workflow: \"Agentic\"`.",
         "- The field schema, source documents, matching threshold, and fail-closed scoring are identical.",
-        "- Failed documents retain all gold obligations and contribute zero predictions.",
+        "- Missing, failed, and skipped documents retain all gold obligations and contribute zero predictions.",
+        "- Native payloads may omit operation status; service_status remains null rather than inventing a service status.",
         "",
         "### Golden-set composition",
         "",
@@ -811,15 +1019,20 @@ def write_report(
             "",
             "| Metric | Standard | Agentic |",
             "|---|---:|---:|",
-            f"| Completed documents | {standard['completed_count']}/10 | {agentic['completed_count']}/10 |",
+            f"| Completed documents | {standard['completed_count']}/{standard['document_count']} | {agentic['completed_count']}/{agentic['document_count']} |",
             f"| Mean latency | {fmt_number(standard['latency_seconds']['mean'])} s | {fmt_number(agentic['latency_seconds']['mean'])} s |",
             f"| P95 latency | {fmt_number(standard['latency_seconds']['p95'])} s | {fmt_number(agentic['latency_seconds']['p95'])} s |",
-            f"| Active execution time | {fmt_number(standard['latency_seconds']['total'] / 60)} min | {fmt_number(agentic['latency_seconds']['total'] / 60)} min |",
-            f"| Input tokens | {standard['total_input_tokens']:,} | {agentic['total_input_tokens']:,} |",
-            f"| Output tokens | {standard['total_output_tokens']:,} | {agentic['total_output_tokens']:,} |",
+            f"| Active execution time | {fmt_number(measured_ratio(standard['latency_seconds']['total'], 60))} min | {fmt_number(measured_ratio(agentic['latency_seconds']['total'], 60))} min |",
+            f"| Input tokens | {fmt_tokens(standard['total_input_tokens'])} | {fmt_tokens(agentic['total_input_tokens'])} |",
+            f"| Output tokens | {fmt_tokens(standard['total_output_tokens'])} | {fmt_tokens(agentic['total_output_tokens'])} |",
             f"| Duplicate obligations | {standard['duplicate_count']} | {agentic['duplicate_count']} |",
-            f"| Agentic latency multiplier | - | {latency_ratio:.1f}x |",
-            f"| Agentic token multiplier | - | {token_ratio:.1f}x |",
+            f"| Agentic latency multiplier | - | {fmt_number(latency_ratio)} |",
+            f"| Agentic token multiplier | - | {fmt_number(token_ratio)} |",
+            "",
+            "Unknown measurements stay null, not zero. Token and active-time totals require "
+            "measurements for every expected document, including failures. Latency statistics "
+            "require timing for every completed document. JSON includes measurement coverage "
+            "and explicitly partial observed token sums; console --usage/--time is not parsed.",
             "",
             "Dollar cost is intentionally not estimated because the repository's "
             "cost model does not define a verified `gpt-5.2` preview price.",
@@ -880,7 +1093,9 @@ def write_report(
             f"- Standard required-detail accuracy was {fmt_percent(standard['required_detail_accuracy'])}; "
             f"Agentic required-detail accuracy was {fmt_percent(agentic['required_detail_accuracy'])}.",
             "",
-            *qualitative_lines,
+            "The checked-in REPORT.md and qualitative review describe the historical run only; "
+            "their verdicts are not applied to this evaluation.",
+            "",
             "## Interpretation",
             "",
             "This benchmark measures broad atomic obligations, not CUAD's narrower "
@@ -902,11 +1117,13 @@ def write_report(
             "",
         ]
     )
-    output_path.write_text("\n".join(lines), encoding="utf-8")
+    with output_path.open("x", encoding="utf-8") as handle:
+        handle.write("\n".join(lines))
 
 
 def write_json(data: dict[str, Any], path: Path) -> None:
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    with path.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(data, indent=2, allow_nan=False) + "\n")
 
 
 def main() -> None:
@@ -915,34 +1132,46 @@ def main() -> None:
     parser.add_argument("--samples", type=Path, default=DEFAULT_SAMPLES)
     parser.add_argument("--standard-results", type=Path, required=True)
     parser.add_argument("--agentic-results", type=Path, required=True)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--standard-report", type=Path, help="Native CLI report; defaults to report.json in the result directory")
+    parser.add_argument("--agentic-report", type=Path, help="Native CLI report; defaults to report.json in the result directory")
+    parser.add_argument("--output", type=Path, help="New metrics directory; defaults to a unique directory under evaluation/output")
     parser.add_argument(
         "--report",
         type=Path,
-        default=PROJECT_DIR / "REPORT.md",
+        help="New report path; defaults to REPORT.md in the new metrics directory",
     )
     args = parser.parse_args()
     gold_records = load_gold(args.gold.resolve())
-    output_dir = args.output.resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = args.output or DEFAULT_OUTPUT / (
+        datetime.now(timezone.utc).strftime("evaluation_%Y%m%dT%H%M%SZ_") + uuid4().hex[:8]
+    )
+    output_dir = output_dir.resolve()
+    report_path = (args.report or output_dir / "REPORT.md").resolve()
+    for path in (output_dir / "standard_metrics.json", output_dir / "agentic_metrics.json", report_path):
+        if path.exists():
+            raise FileExistsError(f"Refusing to overwrite saved evidence: {path}")
     standard = evaluate_mode(
         "Standard",
         gold_records,
         args.samples.resolve(),
         args.standard_results.resolve(),
+        args.standard_report,
     )
     agentic = evaluate_mode(
         "Agentic",
         gold_records,
         args.samples.resolve(),
         args.agentic_results.resolve(),
+        args.agentic_report,
     )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(standard, output_dir / "standard_metrics.json")
     write_json(agentic, output_dir / "agentic_metrics.json")
-    write_report(standard, agentic, args.report.resolve())
+    write_report(standard, agentic, report_path)
     print(
         f"Standard F1={standard['f1']:.1%}; Agentic F1={agentic['f1']:.1%}; "
-        f"report={args.report.resolve()}"
+        f"report={report_path}"
     )
 
 

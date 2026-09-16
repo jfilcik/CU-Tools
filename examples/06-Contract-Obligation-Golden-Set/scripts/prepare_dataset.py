@@ -46,6 +46,7 @@ def prepare_dataset(
     manifest_path: Path = DEFAULT_MANIFEST,
     output_dir: Path = DEFAULT_OUTPUT,
     clean: bool = False,
+    manifest_output: Path | None = None,
 ) -> dict[str, Any]:
     if not dataset_path.is_file():
         raise FileNotFoundError(
@@ -96,7 +97,9 @@ def prepare_dataset(
         "source_revision": manifest["source_revision"],
         "documents": materialized,
     }
-    (output_dir / "materialized_manifest.json").write_text(
+    manifest_output = manifest_output or output_dir / "materialized_manifest.json"
+    manifest_output.parent.mkdir(parents=True, exist_ok=True)
+    manifest_output.write_text(
         json.dumps(output_manifest, indent=2) + "\n",
         encoding="utf-8",
     )
@@ -109,12 +112,17 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--clean", action="store_true")
+    parser.add_argument(
+        "--manifest-output", type=Path,
+        help="Write provenance outside --output to keep native CLI source directories input-only",
+    )
     args = parser.parse_args()
     result = prepare_dataset(
         args.dataset.resolve(),
         args.manifest.resolve(),
         args.output.resolve(),
         clean=args.clean,
+        manifest_output=args.manifest_output.resolve() if args.manifest_output else None,
     )
     print(f"Prepared {len(result['documents'])} contracts in {args.output.resolve()}")
 

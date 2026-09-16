@@ -1,191 +1,160 @@
 ---
 name: iterate-analyzer-schema
-description: Runs evidence-driven Azure AI Content Understanding schema experiments with immutable baselines, repeated trials, promotion gates, and linked reports. Use when users ask to improve analyzer consistency, compare schema versions, measure regressions, or iteratively tune extraction without hard-coding sample answers.
+description: Runs evidence-driven CU schema experiments with immutable baselines, official cu execution, offline diagnostics, repeated parallel trials, and correctness promotion gates. Use to improve consistency, compare versions, or investigate regressions.
 ---
 
 # Skill: Iterate Analyzer Schema
 
-## Purpose
+This is the common experiment workflow. Use task-specific skills for
+[initial creation](generate-analyzer.skill.md),
+[routing](generate-analyzer-classify-route.skill.md),
+[video](generate-analyzer-video.skill.md), or [preview](cu-preview-api.skill.md).
+[Agents.md](../../Agents.md) owns API rules;
+[iteration workspaces](../../docs/iteration-workspaces.md) owns the manifest,
+bug-link, cost, and STP contracts. Do not invent a second workspace format.
 
-Use this workflow to improve a Content Understanding analyzer while preserving
-causal evidence. Each iteration states one coherent hypothesis, runs the full
-representative corpus repeatedly, evaluates correctness and stability, and is
-promoted only when protected behavior does not regress.
+## 1. Select a numbered experiment
 
-For a new single-document analyzer, start with
-`generate-analyzer.skill.md`. For packet segmentation and routing, also use
-`generate-analyzer-classify-route.skill.md`.
+- Keep customer samples, truth, schemas, and outputs private; reusable tools
+  and approved public examples stay in CU-Tools.
+- Use the next unused `case\iterations\NNN`. Baseline `001` is immutable;
+  candidates record `baseline_iteration`, expected/actual defects, and exact
+  changes. Link verified product bugs in the relevant root/iteration `bugs`
+  arrays, separately from local defect IDs.
+- State one coherent, reusable hypothesis and a safety/budget stopping cap.
+  Do not tune to filenames, customer names, coordinates, page numbers, or
+  literal sample answers.
+- Freeze/hash selected inputs and all submitted schema snapshots. Version
+  truth, evaluator/config, acceptance rules, and development/holdout membership.
+- A changed hypothesis, configuration, dataset, evaluator, or metric requires
+  a new number. Repeated trials and a predeclared baseline/candidate comparison
+  matrix are within one experiment; later matrix changes require another.
 
-## Required boundaries
+Keep exact schemas under `inputs\schemas\`, native responses and execution
+evidence under `outputs\raw\`, and derived exports/comparisons under
+`outputs\evaluation\`. Use the canonical `manifest.json` and `report.md`;
+the helper's immutable `experiment.json` plan/jobs (`cu-experiments/v1`) and
+separate `run.json` execution state/outcomes (`cu-experiments/run/v1`)
+supplement, not replace, them. Execution must not overwrite the frozen plan.
 
-- Keep customer samples, reviewed truth, schemas, raw results, and reports in
-  the customer's private issue workspace.
-- Keep reusable skills and generic tools in CU-Tools.
-- Never place expected customer values in field descriptions.
-- Never tune to file names, page numbers, customer names, coordinates, or one
-  template's literal answers.
-- Never overwrite baseline or prior-iteration raw results.
-- Never use confidence or fill rate as a substitute for correctness.
+## 2. Establish reviewed behavior
 
-## Workspace contract
+Define denominators and evidence sources for:
 
-Use [the canonical v1 format](../../docs/iteration-workspaces.md) and
-[copyable template](../../examples/_TEMPLATE/), not a separate iteration
-layout. Select the case and next unused number before creating artifacts.
+1. **Correctness:** reviewed exact/rule-based expectations and business checks.
+2. **Coverage:** every required row, segment, repeated entity, and input.
+3. **Stability:** distinct values, population, row/segment-count drift.
+4. **False positives:** cross-field leakage and semantically wrong fallbacks.
+5. **Efficiency:** observable latency, usage, and attributable/estimated cost.
+6. **Diagnostics:** fill, source coverage, and confidence where present.
 
-```text
-case/
-|-- manifest.json
-|-- README.md
-|-- inputs/documents/
-`-- iterations/
-    `-- 001/
-        |-- manifest.json
-        |-- inputs/
-        |   |-- schemas/
-        |   `-- ...             # Inventory, truth, evaluator and rules
-        |-- outputs/raw/
-        |-- outputs/evaluation/
-        `-- report.md
+Record cause status as unknown/suspected/confirmed. A missing value with high
+confidence does not prove a reading-order or service defect; isolate against
+source text, structure, and reviewed truth. See
+[field diagnostics](iterate-schema.skill.md) for targeted investigation.
+
+For STP, predeclare eligible cases, critical-field and business-rule gates,
+automatic acceptance/review policy, false-accept auditing, and holdout scope.
+An API success, filled field, or confident answer is not reviewed correctness.
+
+## 3. Validate and prepare execution
+
+Official `cu` is the sole CU execution backend. Use its structural/spec
+validation and the offline local quality validator:
+
+```powershell
+cu analyzer validate "{iteration_folder}\inputs\schemas\candidate.json" `
+  --api-version 2025-11-01 --spec
+python tools\cu-analyzer-validate\cu_analyzer_validator.py `
+  "{iteration_folder}\inputs\schemas\candidate.json" --api-version 2025-11-01
 ```
 
-The initial baseline is iteration `001`; candidates set `baseline_iteration`
-to a prior ID. Preserve existing shared samples/legacy evidence in place and
-link them with provenance rather than relabeling them as a new run. Snapshot
-and hash submitted schemas; inventory/hash every input and version evaluator,
-truth, and acceptance policy. Changes to hypothesis, configuration, dataset,
-or metrics start a new number. `--iterations N` is N trials within that number.
-Link verified product bugs in the root and relevant iteration `bugs` arrays,
-separately from local defects; follow [tracking bugs](../../docs/iteration-workspaces.md#tracking-bugs).
+Use explicit preview versions when needed. Create each new analyzer with
+`cu analyzer create --name VERSIONED_ID --schema SCHEMA --api-version VERSION`.
+For dependencies, use the offline schema planner and reviewed dependency-first
+official commands in the [routing skill](generate-analyzer-classify-route.skill.md).
+Analyzer creation/deletion is never part of the experiment helper.
 
-## Workflow
+Snapshot the observed definition of any reused analyzer before planning:
 
-### 1. Establish the baseline
+```powershell
+cu analyzer show invoice_001 > "{iteration_folder}\inputs\schemas\baseline-observed.json"
+```
 
-Record:
+Retain the original submitted schema separately; observed definitions may
+contain service metadata. Record CLI package/version, actual sanitized
+commands and working directory, API/model/profile/resource identity, schema
+hashes, and observed analyzer/request IDs. Never save credentials.
 
-- API version, model, region, analyzer schema, and exact command;
-- representative corpus and data classification;
-- reviewed expected outcomes kept outside schema prompts;
-- successful, failed, and retried attempt counts and source run IDs;
-- correctness, null, variant, array-row, segment, latency, and token metrics
-  with explicit denominators and evidence sources;
-- per-iteration cost status/amount/basis, including billable repeated trials.
+## 4. Choose the smallest execution path
 
-When consistency is the goal, plan at least five repeated trials per document
-subject to explicit cost approval; do not launch a paid corpus automatically.
+- **One file or ordinary folder batch:** use native `cu analyze` as in
+  [Eval CU](eval-cu.skill.md). Native `--concurrency` is 1–32.
+- **Repeated trials or multiple analyzers:** use the task-specific experiment
+  helper. It snapshots explicit files and plans the full matrix offline.
+  Do not use it for ordinary directory discovery.
 
-### 2. Define tracked behavior
+Five parallel repeats of one file:
 
-Separate metrics into:
+```powershell
+python tools\cu-experiments\experiment.py plan `
+  --input "{document_path}" --analyzer invoice_002 `
+  --iterations 5 --concurrency 5 --api-version 2025-11-01 `
+  --output "{iteration_folder}\outputs\raw\experiment"
+```
 
-1. **Correctness**: exact or rule-based reviewed expectations.
-2. **Stability**: population, distinct values, and array/segment count drift.
-3. **False positives**: semantically wrong fallback or cross-field leakage.
-4. **Coverage**: row, segment, and repeated-entity retention.
-5. **Efficiency**: latency, token use, and cost (estimated versus actual charges).
-6. **Diagnostics**: field source and confidence coverage.
+Review the planned file hashes, analyzers, repeats, API/profile, **total**
+request count, and cost assumptions. Only after explicit paid-run approval:
 
-For repeated entities, evaluate each row or segment and the document aggregate.
-For STP claims, define eligible scope and a held-out evaluation of critical
-correctness, false accepts, review, failures, and business-rule gates. Field
-fill/confidence is not a proxy for case-level automatic correctness.
+```powershell
+python tools\cu-experiments\experiment.py run `
+  "{iteration_folder}\outputs\raw\experiment" --confirm-cost
+```
 
-### 3. State one coherent hypothesis
+For ten parallel repeats use `--iterations 10 --concurrency 10` at planning
+time. Repeat `--input FILE` for more frozen documents and `--analyzer ID` for
+a comparison, snapshotting each analyzer's schema. The request count is
+inputs × analyzers × iterations. Use `--profile NAME` at planning time when
+needed; `run --cu-executable PATH` selects the intended official executable.
 
-Good hypotheses describe a reusable semantic rule:
+Concurrency is a **global** request cap, divided among the native CLI
+processes—not multiplied per analyzer. The helper invokes one native batch per
+analyzer over distinct staged trial files; native `cu` owns scheduling,
+submission, and polling. There is no native repeat or multi-analyzer flag.
+Use a new output directory for any rerun; there is no automatic resume or
+rebilling. Never restart uncertain failures without assessing incurred cost.
 
-- bind a value to an exact label or same table column;
-- separate two semantically different fields;
-- represent repeated entities as arrays;
-- split packet documents before scalar extraction;
-- replace a lossy scalar with address lines or structured components;
-- compute deterministic totals outside model extraction.
+## 5. Evaluate the complete matrix
 
-Do not bundle unrelated prompt changes merely to improve a score.
+Use [Eval CU](eval-cu.skill.md) for the exact helper artifact paths, offline
+export, and reporting. Preserve native `.result.json` files, CLI status reports,
+the immutable plan/hashes, and the separate `run.json` execution record/logs.
+Keep completed evidence unchanged. Status reports are not analysis data,
+accuracy scores, or guaranteed
+per-input token/latency records. Missing usage or timings stay unknown/null;
+console telemetry is not a stable machine-readable schema.
 
-### 4. Review schema language
+Evaluate all planned inputs and trials, including failures. Failed/missing
+outputs fail closed for case acceptance; incomplete comparisons are
+inconclusive, not correct null values. Match baseline/candidate by the frozen
+input identity and schema, not merely filenames in different output folders.
+Rerun the full controlled corpus, not only the motivating failure.
 
-Field descriptions may contain:
+## 6. Apply promotion gates and close
 
-- semantic labels and common label variants;
-- party, section, row, and column boundaries;
-- explicit exclusions for commonly confused fields;
-- domain-valid normalization such as ISO currency or weight units;
-- null behavior when the correct source is blank or absent.
+Promote only when required trials complete, critical correctness and coverage
+pass, false-positive leakage does not increase, protected behavior does not
+regress, and schema language passes the anti-hard-coding review. Efficiency
+cannot compensate for correctness regressions.
 
-Field descriptions must not contain:
+Complete report/manifest with source-linked metrics and denominators, reviewed
+expected/actual examples, limitations, accept/reject/inconclusive decision,
+and the next hypothesis. Record every iteration's cost, including layout,
+repeats, failures/retries, and billable evaluation, or disclose exclusions.
+Price × usage is estimated, actual attributable charges are measured, and
+missing evidence means unknown/null—not zero.
 
-- expected values copied from test documents;
-- file names, customer names, page counts, or page numbers;
-- coordinates or instructions tied to one layout;
-- fallbacks between semantically different values;
-- model arithmetic that can be performed deterministically after extraction.
-
-### 5. Validate and execute
-
-Validate every schema before creating analyzers. Pass preview API versions
-explicitly. For classify-and-route:
-
-- create inner analyzers before the classifier;
-- use `config.enableSegment: true` with `contentCategories`;
-- test inner analyzers independently;
-- run the routed packet and verify segment boundaries;
-- delete temporary analyzers after the run.
-
-Use official `cu` for routine individual operations; keep `run.py` for repeat
-trials/diagnostics and `create_and_test.py` for lifecycle or routing
-orchestration. Those runners retain their legacy REST backend and bundle.
-Save exact sanitized commands, tool git/version, API/model, runtime IDs,
-metadata, and raw JSON under the selected iteration's `outputs/raw/`.
-Put derived comparisons/exports under `outputs/evaluation/`, never over raw
-baseline results.
-
-### 6. Apply promotion gates
-
-A candidate is promotable only when:
-
-- every required trial completed successfully;
-- all critical correctness rules pass;
-- false-positive leakage does not increase;
-- protected fields do not regress;
-- required row and segment coverage passes;
-- schema descriptions pass the anti-hard-coding review.
-
-Efficiency improvements cannot compensate for correctness regressions. Failed
-documents fail closed for acceptance; mark incomplete comparison evidence
-inconclusive rather than treating absent output as a correct null value.
-
-### 7. Design the next iteration
-
-Use failure evidence from the complete corpus to choose the next hypothesis.
-Change only the smallest coherent field family needed to test it. Rerun the
-entire corpus; do not rerun only the document that motivated the change.
-
-Set a safety cap before starting. Stop when all gates pass or the cap is
-reached, then document the safest candidate and unresolved blockers.
-
-### 8. Publish evidence
-
-Maintain:
-
-- the root manifest's iteration index, refreshed from authoritative iteration
-  manifests (hypothesis, result summary, status, and path);
-- the root defect list with expected/actual behavior and evidence-backed
-  unknown/suspected/confirmed cause status;
-- a per-iteration report with schema links, machine-readable comparison, raw
-  results, runtime/tokens, cost status/basis, and promotion decision.
-
-Record every iteration's cost, including failures. Price-based calculations
-remain estimated; unknown costs are null, not zero. Optional `findings.md`
-may curate reusable lessons with source links and contradictions, never
-replace immutable inputs or raw evidence.
-
-## Success criteria
-
-- Baseline and raw results remain immutable.
-- Every candidate is reproducible from a manifest and exact command.
-- Correctness and stability are measured across the full corpus.
-- Promotion decisions are deterministic and machine-readable.
-- Schema prompts remain generic as the corpus and template variation grow.
-- Each iteration's cost and limitations are visible; root navigation matches it.
+Synchronize the root iteration index; preserve finished evidence. Delete only
+actually-created, owned analyzers after explicit cleanup authorization and
+dependency checks, in reverse creation order. Retain evidence even when the
+experiment is rejected or blocked.

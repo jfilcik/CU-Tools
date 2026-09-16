@@ -21,7 +21,7 @@ from cu_migrate.models import (
 
 
 def _check_pro_mode(source: SourceAnalyzer) -> list[MigrationFinding]:
-    props = {**source.config, **source.raw_definition}
+    props = {**source.config, **source.definition}
     findings: list[MigrationFinding] = []
     if props.get("proMode") or props.get("analysisMode", "").lower() == "pro":
         findings.append(MigrationFinding(
@@ -43,7 +43,7 @@ def _check_pro_mode(source: SourceAnalyzer) -> list[MigrationFinding]:
 
 
 def _check_face_api(source: SourceAnalyzer) -> list[MigrationFinding]:
-    props = {**source.config, **source.raw_definition}
+    props = {**source.config, **source.definition}
     findings: list[MigrationFinding] = []
     if props.get("faceAnalysis"):
         findings.append(MigrationFinding(
@@ -66,7 +66,7 @@ def _check_face_api(source: SourceAnalyzer) -> list[MigrationFinding]:
 
 def _check_inline_upload(source: SourceAnalyzer) -> list[MigrationFinding]:
     """Flag analyzers that may rely on inline binary upload in analyze calls."""
-    props = {**source.config, **source.raw_definition}
+    props = {**source.config, **source.definition}
     findings: list[MigrationFinding] = []
     # Heuristic: if the source definition mentions inline content or base64
     raw_str = str(props).lower()
@@ -99,14 +99,14 @@ def _check_model_deployments(source: SourceAnalyzer) -> list[MigrationFinding]:
     return [MigrationFinding(
         severity=FindingSeverity.NEEDS_REVIEW,
         category="model_deployment",
-        message="GA requires completion and embedding model deployments on the resource",
+        message="Model availability and resource deployment mappings have not been checked offline",
         analyzer_id=source.analyzer_id,
-        recommended_action="Verify gpt-4.1 and text-embedding-3-large deployments exist in your resource",
+        recommended_action="Inspect models and resource defaults with the official cu CLI before creating a replacement",
     )]
 
 
 def _check_video_segmentation(source: SourceAnalyzer) -> list[MigrationFinding]:
-    props = {**source.config, **source.raw_definition}
+    props = {**source.config, **source.definition}
     findings: list[MigrationFinding] = []
     raw_str = str(props).lower()
     if "videosegmentation" in raw_str or "contentsegment" in raw_str:

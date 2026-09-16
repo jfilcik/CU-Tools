@@ -1,366 +1,167 @@
 ---
 name: generate-analyzer-video
-description: Creates and tests Azure AI Content Understanding video analyzers with accurate keyframe-anchored timestamps. Use when users need to detect objects, scenes, or events in videos with temporal grounding. Covers schema design, timestamp format, keyframe anchoring, and validation patterns for videos of all lengths.
+description: Creates and tests CU video analyzers with keyframe-grounded string timestamps, official cu local-file execution, and reviewed temporal/detection evaluation.
 ---
 
 # Skill: Generate Video Analyzer
 
-## Quick Start
-Use this workflow for video analysis with accurate timestamps.
-1. Select a numbered case iteration and freeze 3-5 representative video samples.
-2. Run a single test to understand keyframe structure.
-3. Define fields using the keyframe-anchored timestamp pattern.
-4. Test on short videos first, then scale to longer content.
-5. Validate timestamps against KeyFrameTimesMs ground truth.
+Use for object/event extraction with temporal grounding. Follow
+[Agents.md](../../Agents.md) for API rules,
+[Iterate Analyzer Schema](iterate-analyzer-schema.skill.md) for experiment
+workflow, and [iteration workspaces](../../docs/iteration-workspaces.md) for
+manifests, verified bugs, cost, and STP.
 
-Core commands:
-```bash
-python tools/cu-analyzer-run/create_and_test.py --schema "{iteration_folder}/inputs/schemas/{name}_v1.json" --input "{sample_folder}" --output "{iteration_folder}/outputs/raw/analysis"
-python tools/cu-results-export/export.py --input "{iteration_folder}/outputs/raw/analysis" --output "{iteration_folder}/outputs/evaluation/results.csv"
-```
+## 1. Freeze a bounded video scope
 
-## Workspace and evidence
+Select `case\iterations\NNN` and 3–5 representative, authorized local videos.
+Start with short clips (for example under two minutes), then evaluate longer
+content in a new numbered experiment. Keep customer video and evidence private.
+Record hypothesis/baseline, expected/actual defects, video/schema hashes,
+independently checked duration, reviewed truth, and evaluator versions.
 
-Follow [the v1 workspace guide](../../docs/iteration-workspaces.md).
-`{iteration_folder}` is the selected `case/iterations/NNN`; customer videos
-and outputs stay private. Record hypothesis/baseline, defects, input/video and
-schema hashes, and versioned truth/evaluator. Raw responses stay in
-`outputs/raw/`; timestamp validation, post-processed derivatives, exports,
-and frame review belong in `outputs/evaluation/`. Never overwrite raw
-timestamps with snapped values; score raw and post-processed results separately.
-Link verified product bugs in the root and relevant iteration `bugs` arrays,
-separately from local defects; follow [tracking bugs](../../docs/iteration-workspaces.md#tracking-bugs).
+Preserve raw timestamps under `outputs\raw\`; frame review, timestamp checks,
+and post-processing belong under `outputs\evaluation\`. Changes to scope,
+schema, normalization, or metric rules require a new number. Obtain explicit
+cost approval before service calls and repeated/scale work.
 
-Use official `cu` for supported routine local-file calls; keep the integrated
-runner above for lifecycle/bundle compatibility. Large-video URL workflows
-remain advanced; do not pretend the official CLI supports legacy URL flags.
-The runners retain their REST backend. Record sanitized commands and
-tool/git/API/model/runtime IDs without SAS query strings or credentials.
+## 2. Design for observable grounding
 
-Short and long-video scopes, new schemas, post-processing rules, or new
-metrics require separate numbered experiments. Repeated trials remain within
-one experiment. Apply cost approval before scale/stability work and account
-for cost in every manifest/report, including failures/retries.
+Video responses can expose transcript, keyframe, and temporal segment details.
+Inspect what the selected API/analyzer actually returns; do not infer model
+implementation details from output alone. A returned
+keyframe timestamp establishes a sampled observation time, **not** the true
+first appearance between samples or correctness of the detected object.
 
-> ⚠️ **Edge-case flag:** Videos > 20 MB (or unknown/mixed size) must use a SAS blob URL upload, not binary upload. Read **Edge Cases & Workarounds → Large videos (> 20 MB)** at the end of this skill *before* processing large files.
-
-## Video-Specific Concepts
-
-### Two-Stage Pipeline for Video
-CU processes video in two stages:
-1. **Stage 1**: Extracts audio transcript, keyframes at specific timestamps, and camera shot boundaries
-2. **Stage 2**: GPT-4.1 analyzes the extracted text + keyframe descriptions to generate field values
-
-**What the LLM sees** (in Stage 2):
-- Audio transcript with timestamps
-- A "Key Frames" section listing keyframe timestamps in `hh:mm:ss.ms` format (e.g., `00:00:06.375`)
-- Camera shot boundaries
-- It does **NOT** see the actual video frames — only text descriptions of them
-
-This means:
-- Timestamps MUST reference the Key Frames list — the LLM cannot observe arbitrary moments
-- Object detection is limited to what's described in keyframe captions
-- The `keyFrame.XXXX.jpg` filename format is API-level output only; the prompt uses `hh:mm:ss.ms`
-
-### KeyFrameTimesMs Ground Truth
-Every video result includes `contents[].KeyFrameTimesMs` — an array of millisecond timestamps for all pipeline-extracted keyframes. Use this to validate generated timestamps:
-- **Exact match**: Generated timestamp matches a value in KeyFrameTimesMs → high confidence
-- **Near match**: Within 500ms of a keyframe → acceptable for navigation UX
-- **No match / exceeds duration**: Hallucinated timestamp → needs post-processing
-
-### API Version Requirements
-- Use GA API version `2025-11-01`
-- `enableSegmentation`, `segmentationMode`, and `segmentationDefinition` are **NOT supported** in the GA API
-- For video segmentation, use `contentCategories` with `enableSegment: true` (see generate-analyzer-classify-route.skill.md)
-
-## Workflow
-
-### 1) Gather Inputs
-Checklist:
-- Collect 3-5 video files covering different content types and lengths
-- Start with short videos (<2 min) for initial schema development
-- Confirm environment variables: AZURE_AI_ENDPOINT, AZURE_AI_API_KEY
-- ⚠️ For any video > 20 MB (or unknown/mixed size): use SAS blob URL upload, not binary. See **Edge Cases & Workarounds → Large videos (> 20 MB)** at the end of this skill.
-
-### 2) Design Schema — Timestamp Fields
-
-#### ✅ Recommended Pattern: String Timestamps in hh:mm:ss.ms
-
-Use `type: "string"` for timestamp fields with the `hh:mm:ss.ms` format. This matches the format used in the internal prompt's Key Frames section, giving the LLM the best chance of copying timestamps exactly.
+Use `prebuilt-video`, `returnDetails: true`, and generated structured fields.
+Prefer string timestamps in `hh:mm:ss.ms` (for example `00:00:06.375`) to
+avoid requiring the model to convert units. Define events narrowly and
+require available keyframe grounding; do not infer arbitrary times.
 
 ```json
 {
-  "description": "Video object detection — keyframe-anchored timestamps",
+  "description": "Identify supported product appearances at observed keyframe times",
   "baseAnalyzerId": "prebuilt-video",
-  "config": {
-    "returnDetails": true,
-    "locales": ["en-US"],
-    "disableContentFiltering": true
-  },
+  "config": { "returnDetails": true },
+  "models": { "completion": "gpt-4.1" },
   "fieldSchema": {
     "fields": {
-      "detectedObjects": {
+      "DetectedObjects": {
         "type": "array",
         "method": "generate",
-        "description": "Identify all distinct physical objects, products, brand logos, and notable items visible in the video. For each object, report its name and the EXACT timestamp (in hh:mm:ss.ms) where the object first appears. CRITICAL: The startTime value MUST be copied exactly from one of the keyframe timestamps. DO NOT interpolate, estimate, or generate timestamps that are not in the Key Frames list. If an object does not clearly appear in any keyframe, use the nearest keyframe where it is partially visible.",
+        "description": "List distinct products clearly supported by the available video evidence. For each product, use its earliest supported keyframe timestamp; do not guess an appearance between keyframes. Omit detections without sufficient evidence.",
         "items": {
           "type": "object",
+          "description": "One supported product appearance and its observed keyframe timestamp.",
           "properties": {
-            "objectName": {
+            "ObjectName": {
               "type": "string",
               "method": "generate",
-              "description": "Descriptive name of the object. Be specific, include brand names when visible."
+              "description": "Name of the product supported by the video evidence; include a brand only when clearly identifiable."
             },
-            "startTime": {
+            "StartTime": {
               "type": "string",
               "method": "generate",
-              "description": "The EXACT keyframe timestamp in hh:mm:ss.ms where this object first appears. This value MUST match one of the timestamps from the Key Frames section. For example: 00:00:00.750, 00:00:01.500, 00:00:06.375, etc. Do NOT use any value that is not listed as a keyframe timestamp."
+              "description": "Copy the earliest supported keyframe timestamp for this product in hh:mm:ss.ms format, such as 00:00:06.375. Do not interpolate or invent a timestamp."
             }
           }
         }
       }
     }
-  },
-  "models": { "completion": "gpt-4.1" }
+  }
 }
 ```
 
-#### Key Design Rules
+This is a starting schema, not a guarantee of timestamp or detection accuracy.
+Do not use image filenames as the temporal contract. For segmentation, consult
+the documented `contentCategories`/`enableSegment` contract; do not invent
+segmentation properties or assume recursive document routing applies to video.
 
-1. **Timestamp type MUST be `string`** — Use `hh:mm:ss.ms` format (e.g., `"00:00:06.375"`), not integer milliseconds. The Key Frames section in the internal prompt uses this format, so string matching yields higher keyframe accuracy.
+## 3. Validate and execute through official `cu`
 
-2. **Keyframe anchoring is CRITICAL** — Field descriptions must explicitly instruct the LLM to copy timestamps from the Key Frames list. Without this, the LLM will hallucinate timestamps that exceed the video duration.
+Replace placeholders and run from the repository root, using the official CLI
+configuration in [README](../../README.md).
 
-3. **Be specific about what to detect** — Instead of "detect all objects", specify the categories relevant to your use case: "physical objects, products, brand logos, and notable items". This improves precision.
-
-4. **Use `method: "generate"`** — Video object detection with timestamps requires `generate`, not `extract`. The LLM must synthesize object-timestamp pairs from the keyframe descriptions.
-
-5. **Always enable `returnDetails: true`** — This returns KeyFrameTimesMs, cameraShotTimesMs, and other metadata needed for timestamp validation.
-
-#### ❌ Patterns to Avoid
-
-- **Integer millisecond timestamps** (`type: "integer"`, `startTimeMs`): The LLM must convert from hh:mm:ss.ms to ms, introducing conversion errors and hallucination
-- **Referencing `keyFrame.XXXX.jpg` filenames**: This format is API output only; the internal prompt uses `hh:mm:ss.ms`
-- **Vague descriptions**: "Get timestamps for objects" → Be explicit about keyframe anchoring
-- **enableSegmentation config**: Not supported in GA API 2025-11-01
-
-### 3) Validate and Test
-
-```bash
-# Validate schema
-python tools/cu-analyzer-validate/cu_analyzer_validator.py "{iteration_folder}/inputs/schemas/{name}_v1.json"
-
-# Create analyzer and test on short videos first
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema "{iteration_folder}/inputs/schemas/{name}_v1.json" \
-  --input "{short_videos_folder}" \
-  --output "{iteration_folder}/outputs/raw/analysis"
+```powershell
+cu analyzer validate "{iteration_folder}\inputs\schemas\video.json" `
+  --api-version 2025-11-01 --spec
+python tools\cu-analyzer-validate\cu_analyzer_validator.py `
+  "{iteration_folder}\inputs\schemas\video.json" --api-version 2025-11-01
 ```
 
-### 4) Validate Timestamps
+After offline checks pass, create a fresh versioned analyzer:
 
-After testing, validate timestamp accuracy against KeyFrameTimesMs:
-
-```python
-import json, re
-
-def parse_timestamp_to_ms(ts_str):
-    """Parse hh:mm:ss.ms to milliseconds."""
-    m = re.match(r'^(\d+):(\d+):(\d+)[.,](\d+)$', str(ts_str))
-    if m:
-        h, mn, s, frac = m.groups()
-        ms = int(frac.ljust(3, '0')[:3])
-        return int(h)*3600000 + int(mn)*60000 + int(s)*1000 + ms
-    return None
-
-# Select an actual raw result from this numbered experiment.
-raw_result_path = r"{iteration_folder}\outputs\raw\analysis\{actual_result_filename}"
-with open(raw_result_path) as f:
-    result = json.load(f)
-
-contents = result["result"]["contents"]
-for content in contents:
-    kf_times = set(content.get("KeyFrameTimesMs", []))
-    duration_ms = content.get("endTimeMs", 0)
-
-    objects = content["fields"]["detectedObjects"]["valueArray"]
-    for obj in objects:
-        vo = obj["valueObject"]
-        name = vo["objectName"]["valueString"]
-        ts_str = vo["startTime"]["valueString"]
-        ts_ms = parse_timestamp_to_ms(ts_str)
-
-        in_keyframes = ts_ms in kf_times
-        exceeds = ts_ms > duration_ms if ts_ms else False
-        print(f"  {name}: {ts_str} → {ts_ms}ms | KF match: {in_keyframes} | Exceeds: {exceeds}")
+```powershell
+cu analyzer create --name video_001 `
+  --schema "{iteration_folder}\inputs\schemas\video.json" `
+  --api-version 2025-11-01
 ```
 
-**Quality metrics to track:**
-- **KF Match %**: Percentage of timestamps that exactly match a KeyFrameTimesMs value (target: >90% for short videos)
-- **Exceeds %**: Timestamps that exceed video duration (target: 0%)
-- **Avg KF Delta**: Average distance from nearest keyframe in ms (target: <500ms)
+Stop on failure. Only after successful creation and paid-run approval:
 
-### 5) Scale to Longer Videos
-
-Select the next numbered experiment for the longer-video corpus, freeze the
-selection, and record its baseline and cost plan before execution.
-
-#### Expected accuracy by video length
-
-With the recommended V1c pattern (string timestamps in `hh:mm:ss.ms`):
-
-| Video Length | Expected KF Match | Expected Exceeds | Notes |
-|-------------|-------------------|-----------------|-------|
-| <1 min | 100% | 0% | Perfect — tested on 30-44s ads |
-| 1-2 min | 100% | 0% | Perfect — tested on 93s video |
-| 5-15 min | 100% | 0% | Perfect — tested on 14.9m Disney broadcast |
-| 15-60 min | 100% | 0% | Perfect — tested on 57.9m Disney broadcast |
-
-> **Note**: Object count naturally decreases on very long videos (24 objects on 58-min vs 57 on 15-min).
-> The LLM has limited context for very long keyframe lists, but all generated timestamps are accurate.
-
-#### Large videos (> 20 MB)
-
-⚠️ Videos over ~20 MB must use SAS blob URL upload, not binary — see **Edge Cases & Workarounds → Large videos (> 20 MB)** at the end of this skill for the full pattern, batch approach, and verified bounds.
-
-### 6) Post-Processing Recommendations
-
-For production use, always post-process timestamps:
-
-```python
-def snap_to_keyframe(ts_ms, keyframe_times_ms, duration_ms):
-    """Clamp to duration and snap to nearest keyframe."""
-    if ts_ms is None:
-        return None
-    # Clamp to valid range
-    ts_ms = max(0, min(ts_ms, duration_ms))
-    # Snap to nearest keyframe
-    if keyframe_times_ms:
-        nearest = min(keyframe_times_ms, key=lambda k: abs(k - ts_ms))
-        return nearest
-    return ts_ms
+```powershell
+cu analyze "{short_video_path}" --analyzer video_001 --json `
+  --api-version 2025-11-01 --yes --on-existing error `
+  --output-dir "{iteration_folder}\outputs\raw\analysis" `
+  --report-file "{iteration_folder}\outputs\raw\video-status.json"
+python tools\cu-results-export\export.py `
+  --input "{iteration_folder}\outputs\raw\analysis" `
+  --output "{iteration_folder}\outputs\evaluation\results.csv"
 ```
 
-This handles:
-- Timestamps that exceed video duration (clamp)
-- Timestamps between keyframes (snap to nearest)
-- Edge cases on very long videos where LLM approximates
+Native folder batches and five/ten parallel repeats follow
+[Eval CU](eval-cu.skill.md). Apply the same API/profile to all operations.
+Cleanup is an explicit `cu analyzer delete video_001` for the owned analyzer
+when authorized, not an automatic action.
 
-### 7) Visual Validation (Optional)
+## 4. Evaluate timestamps and detections separately
 
-Generate an HTML report with actual video frames at each detected timestamp:
+Use [the video evaluation prompt](../prompts/evaluate-analyzer-video.prompt.md).
+Inspect native `.result.json` contents without assuming a nested envelope.
+When available, compare generated timestamps to returned keyframe times
+(including `KeyFrameTimesMs` in formats that expose it). Missing keyframe or
+duration metadata is unknown, not an empty timeline or zero duration.
 
-If an authorized workspace already supplies a frame-review evaluator, record
-its version/hash and direct its report to
-`{iteration_folder}/outputs/evaluation/validation.html`. The legacy
-`Issues/LuciHub/validate_frames.py` reference is private-workspace tooling, not
-a prerequisite shipped with public examples. Link actual results only.
+Predeclare timestamp parsing, exact-match/near-match tolerances, unit
+conversion, and duration bounds. A tolerance such as 500 ms may suit navigation
+UX but is not proof of an event's true onset. Separately review frames/source
+video to score product/event correctness and missed detections.
 
-Record timestamp metric denominators and raw evidence sources, detection
-correctness against reviewed keyframe content, failed/retried calls, latency,
-and cost in `report.md` and the manifest. Keyframe alignment alone does not
-prove detection correctness or STP. Usage times prices is an estimate; missing
-cost is unknown/null. Refresh the root iteration index after the decision.
+| Video scope | Evaluation emphasis |
+|---|---|
+| Short clips | Establish parser, keyframe alignment, and detection baseline |
+| Medium-length content | Check multiple scenes, transitions, and entity retention |
+| Long content | Audit omissions, coverage, repeated events, latency, and cost |
 
-## Output Structure
-```
-{case_folder}/
-├── manifest.json
-├── README.md
-├── inputs/documents/          # Videos or existing immutable samples/
-└── iterations/001/
-    ├── manifest.json
-    ├── inputs/schemas/
-    ├── outputs/raw/analysis/  # Untouched timestamps and run metadata
-    ├── outputs/evaluation/    # Exports, timestamp and frame validation
-    └── report.md
-```
+Do not extrapolate short-clip scores to longer videos or promise 100% alignment.
+Predeclare workload-specific targets (for example zero out-of-bounds times);
+report actual counts and denominators. Lower object counts on long videos
+may indicate missed coverage and require review—not automatic acceptance.
 
-## Success Criteria
-- Schema validates cleanly
-- Short videos (<2 min): 100% keyframe match, 0% exceeds
-- Medium videos (2-5 min): 100% keyframe match, 0% exceeds
-- Long videos (>5 min): 100% keyframe match, 0% exceeds (object count may be lower)
-- Results exported and validated visually
-- Manifests/report link measured evidence, per-iteration cost, and limitations;
-  historical timestamp targets are not fabricated results for this run.
+## 5. Handle limitations without another backend
 
-## Edge Cases & Workarounds
+The verified PyPI CLI accepts local files; it has no URL-input or configurable
+analysis-timeout option. Check the selected API's documented file/duration
+limits and record compatibility failures. Do not adopt historical upload-size
+thresholds as universal service rules or switch to custom service calls.
 
-Consult this section only when you hit one of these situations. The happy path above covers standard videos; each entry below is referenced from an inline flag earlier in the skill.
+If a video cannot be processed through the installed official CLI, record the
+blocker. An authorized smaller local clip is a new input/scope: preserve the
+original, hash the derived clip, record source offsets, and adjust evaluation
+without implying full-video coverage. Do not silently resubmit failed calls
+or bypass content safety controls.
 
-### Large videos (> 20 MB)
+Optional snapping/clamping is a separately versioned offline transformation,
+not a repair to raw evidence. Keep original values, quantify adjustments, and
+reject/flag invalid or unsupported timestamps rather than hiding them. Score
+raw and transformed output independently; snapping cannot validate an object.
 
-**Any video file larger than ~20 MB MUST be analyzed via a SAS-signed Azure Blob URL — not by binary upload.** The REST binary upload path (`begin_analyze_binary`) silently fails or returns connection-reset errors above this practical limit. This is the single most common source of "the analyzer hangs / times out / 500s on my big video" support tickets.
+## 6. Close the experiment
 
-**Decision rule (apply BEFORE writing any code):**
+Record reviewed correctness, keyframe/duration checks, coverage, failures,
+trial counts, metric sources, and holdout/audit limits. CLI reports are status
+evidence, not guaranteed per-file usage/timing. Missing values remain unknown;
+usage-based pricing is estimated, not measured charges.
 
-| Video file size | Required upload method | Client call |
-|---|---|---|
-| ≤ 20 MB | Local binary upload OR blob URL | `begin_analyze_binary(path)` |
-| > 20 MB | **Blob URL ONLY** | `begin_analyze_url(sas_url)` |
-| Unknown / mixed batch | **Blob URL (always safe)** | `begin_analyze_url(sas_url)` |
-
-When in doubt, always upload to Azure Blob Storage and analyze by URL — it works for every size, removes the upload as a failure mode, and the per-call cost is identical.
-
-**Standard pattern for large videos:**
-
-```python
-# 1. Upload to Azure Blob Storage (one time, or scripted batch).
-#    Container access tier can be Hot or Cool; CU only needs read access.
-# 2. Generate a short-lived read-only SAS URL for the blob (or container).
-#    Minimum SAS rights: read (r). Container SAS is convenient for batches.
-# 3. Submit the SAS URL to CU.
-from content_understanding_client import AzureContentUnderstandingClient
-client = AzureContentUnderstandingClient(endpoint, api_version="2025-11-01", subscription_key=key)
-resp = client.begin_analyze_url(analyzer_id, blob_url_with_sas)
-result = client.poll_result(resp, timeout_seconds=2400)
-```
-
-**Container-SAS batch pattern** (analyze every video under a prefix in one container):
-
-```python
-# List blobs under prefix via the container SAS, then call begin_analyze_url per blob.
-# Reference implementation: Issues/WaPo/analyze_videos.py
-# Use an authorized private workspace and secure credential input.
-# Never save the SAS value in command history, manifests, or reports.
-```
-
-**Verified bounds:**
-- URL-based: tested successfully on videos up to **446 MB / 58 minutes**.
-- Set `timeout_seconds` to roughly **30–40× the video duration in seconds** (e.g., a 10-minute video → 18,000–24,000 s).
-- Local binary upload: practical limit ~20 MB (connection resets on larger files).
-
-### Timestamps exceed video duration
-**Cause**: LLM hallucinates timestamps beyond the video length.
-**Fix**: Ensure field descriptions include explicit keyframe anchoring instructions. Use string type (`hh:mm:ss.ms`) not integer. Always post-process with snap-to-keyframe.
-
-### Content safety filter rejections
-**Cause**: Azure OpenAI content filters flag legitimate video content.
-**Fix**: Add `"disableContentFiltering": true` to the config section. Note: this may not be available in all deployments.
-
-### Low object count on long videos
-**Cause**: LLM has limited context window for very long transcripts/keyframe lists.
-**Fix**: Expected behavior. For >15 min videos, consider pre-splitting into segments, or accept lower detection density.
-
-### Timeout on large videos
-**Cause**: Large file upload or long processing time.
-**Fix**: Use URL-based analysis (`begin_analyze_url`) — see "Large videos (> 20 MB)" above. Set timeout to 30–40× video duration.
-
-### `enableSegmentation` not supported
-**Cause**: This config option is preview-only, not in GA API 2025-11-01.
-**Fix**: Use `contentCategories` with `enableSegment: true` for video segmentation (same pattern as document classify-and-route). See `generate-analyzer-classify-route.skill.md`.
-
-## Related Resources
-- Standard document analyzer: `generate-analyzer.skill.md`
-- Classify-and-route (segmentation): `generate-analyzer-classify-route.skill.md`
-- Technical rules: `Agents.md` sections 4.5 (two-stage pipeline) and 4.6 (schema design)
-- LuciHub investigation: `Issues/LuciHub/README.md` (full test results and analysis)
-- Reference schema: `Issues/LuciHub/schemas/v1c_string_timestamps.json`
-- Visual validation tool: `Issues/LuciHub/validate_frames.py`
-
-## Related Prompts
-- Video-specific eval: `.github/prompts/evaluate-analyzer-video.prompt.md`
-- Core eval workflow: `.github/prompts/evaluate-analyzer.prompt.md`
-- Classify-and-route schema: `.github/prompts/classify-and-route-schema.prompt.md`
-- Write field descriptions: `.github/prompts/write_schema_fields.prompt.md`
+Complete cost/basis for every iteration, report the decision, link verified
+bugs separately from local defects, and refresh the root index. Temporal
+alignment, object counts, fill, and confidence alone do not establish STP.
