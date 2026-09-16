@@ -2,13 +2,13 @@
 
 Covers the migration contract defined in Phase 0:
 - Scopes: single / selected / all analyzers
-- Run modes: dry-run / export / apply
+- Run modes: dry-run / local export (never deployment)
 - Finding classes: auto-fixed / needs-review / not-supported
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -22,7 +22,6 @@ from pydantic import BaseModel, Field
 class RunMode(str, Enum):
     DRY_RUN = "dry_run"
     EXPORT = "export"
-    APPLY = "apply"
 
 
 class MigrationReadiness(str, Enum):
@@ -98,13 +97,6 @@ DEPRECATED_PREVIEW_PROPERTIES: set[str] = {
 # Core models
 # ---------------------------------------------------------------------------
 
-class Resource(BaseModel):
-    """One Azure Content Understanding resource."""
-    name: str
-    endpoint: str
-    auth_mode: str = "entra_id"  # entra_id | subscription_key
-
-
 class AnalyzerInventoryItem(BaseModel):
     """Lightweight record for listing and filtering."""
     analyzer_id: str
@@ -114,6 +106,7 @@ class AnalyzerInventoryItem(BaseModel):
     modified_date: datetime | None = None
     tags: dict[str, str] = Field(default_factory=dict)
     migration_readiness: MigrationReadiness = MigrationReadiness.REVIEW_NEEDED
+    definition_available: bool = False
 
 
 class SourceAnalyzer(BaseModel):
@@ -123,9 +116,17 @@ class SourceAnalyzer(BaseModel):
     scenario: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
     field_schema: dict[str, Any] = Field(default_factory=dict)
-    training_data: dict[str, Any] | None = None
+    training_data: dict[str, Any] | list[dict[str, Any]] | None = None
     tags: dict[str, str] = Field(default_factory=dict)
     raw_definition: dict[str, Any] = Field(default_factory=dict)
+    source_path: str | None = None
+    source_sha256: str | None = None
+    definition_available: bool = True
+
+    @property
+    def definition(self) -> dict[str, Any]:
+        """Definition body, without discarding the original export envelope."""
+        return self.raw_definition.get("properties", self.raw_definition)
 
 
 class ProposedGAAnalyzer(BaseModel):
@@ -166,7 +167,7 @@ class MigrationRun(BaseModel):
     scope: str  # single / selected / all
     selected_analyzers: list[str] = Field(default_factory=list)
     results: list[MigrationResult] = Field(default_factory=list)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
     def success_count(self) -> int:

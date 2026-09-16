@@ -1,176 +1,97 @@
----
-status: ✅ IMPLEMENTED
-version: 1.1.0
-last_updated: 2026-04-18
-replaces: eval-cu.prompt.md, eval-cu-workflow.prompt.md
----
-
 # Prompt: Evaluate Analyzer
 
-Core evaluation workflow for Content Understanding analyzers. Works for all modalities (document, image, video, audio).
+Evaluate reviewed correctness, stability, coverage, and cost; decide whether
+to accept, reject, or investigate a CU analyzer change.
 
-> **Video-specific eval**: See `evaluate-analyzer-video.prompt.md` for timestamp validation, keyframe matching, and video-specific KPIs.
-> **Classify-and-route eval**: See `classify-and-route-schema.prompt.md` for classification accuracy checks and pipeline testing patterns.
+## Context to supply
 
-## Goal
+- Selected case/iteration and immutable baseline.
+- Expected/actual defects, exact changes, and verified tracking bugs.
+- Existing analyzer IDs with schema snapshots; API/profile/model.
+- Frozen input inventory/hashes; reviewed truth and evaluator/config versions.
+- Scale, stability, or predeclared comparison matrix.
+- Acceptance/protected-field policy, development/holdout scope, cost budget,
+  and stopping rule.
 
-Run systematic evals to measure quality, stability, and cost, then decide whether to accept changes or iterate on the schema.
+Use [iteration workspaces](../../docs/iteration-workspaces.md) for the canonical
+manifest/evidence format. Keep customer material private. Select the next
+unused `iterations\NNN` before execution; new configuration, data, or metrics
+requires another number. Multiple trials belong inside the planned experiment.
 
-## Eval Types
+## Execute the requested evaluation
 
-### Scale Eval (1×N)
-- Run **many documents** once each
-- Purpose: Measure coverage and field-level accuracy across document variety
-- Use when: Establishing baselines, validating schema before production
+Follow [Eval CU](../skills/eval-cu.skill.md), which contains the command
+templates and output contract:
 
-### Stability Eval (N×1)
-- Run **one document** (or few) multiple times
-- Purpose: Measure extraction consistency and detect drift
-- Use when: Debugging inconsistent results, tuning confidence thresholds
+- Ordinary local-file/folder batches go directly through official `cu analyze`
+  with native concurrency, `--json`, `--output-dir`, `--report-file`, and
+  `--on-existing error`. Use input-only staging folders with manifests/outputs
+  outside the source, or explicit `--file` selectors; avoid beta discovery filters.
+- Five/ten parallel repeats or multi-analyzer comparisons use
+  `tools\cu-experiments\experiment.py plan` with explicit input files,
+  followed by `run ... --confirm-cost` only after explicit paid-run approval.
+- The helper's concurrency limit is global. It delegates batches, request
+  scheduling, and polling to official `cu`; no second CU execution backend.
+- Analyzer creation/deletion remains explicit official CLI work outside the
+  experiment helper.
+- `experiment.json` is the immutable plan/jobs record; separate `run.json`
+  holds execution state/outcomes. Preserve native raw results/reports and
+  completed execution evidence. Reruns require new paths and cost review,
+  not automatic resume/rebilling.
 
-## Commands
+Preview/Agentic evaluation first passes
+[the preview compatibility gate](../skills/cu-preview-api.skill.md).
 
-### Scale Eval
-```bash
-# Run analyzer on many documents
-python tools/cu-analyzer-run/run.py \
-  --analyzer-id {analyzer_id} \
-  --input {documents_folder} \
-  --output {output_folder}
+## Evaluate offline
 
-# Export results to CSV
-python tools/cu-results-export/export.py \
-  --input {output_folder} \
-  --output {output_folder}/results.csv
-```
+1. Reconcile all planned inputs/analyzers/trials with native per-input statuses
+   and available raw results. Include failures and exclusions explicitly.
+2. Export native recursive `.result.json` or legacy saved results with the
+   offline exporter. Status reports are not extraction data.
+3. Use the versioned evaluator and reviewed truth to score values, business
+   checks, array/segment retention, and case acceptance.
+4. For stability, compare values, missingness, row/segment counts, and
+   normalization across every planned trial—not only successful outputs.
+5. Evaluate protected-field regressions and expected/actual exemplars across
+   the full frozen corpus.
+6. Report fill/confidence as diagnostics separately. Missing confidence,
+   usage, or latency stays unknown/null; CLI console telemetry does not
+   guarantee stable per-input measurements.
 
-### Stability Eval
-```bash
-# Run same document 10 times
-python tools/cu-analyzer-run/run.py \
-  --analyzer-id {analyzer_id} \
-  --input {document_path} \
-  --iterations 10 \
-  --output {output_folder}
+Failed/missing outputs fail closed for acceptance. Incomplete matrices or
+missing truth make comparisons inconclusive. A status report says whether
+inputs completed, not whether extracted answers were correct.
 
-# Export results to CSV
-python tools/cu-results-export/export.py \
-  --input {output_folder} \
-  --output {output_folder}/results.csv
-```
+## Required report
 
-### Cost Estimation (Optional)
-```bash
-# From test results (usage-based - most accurate)
-python tools/cu-cost-estimator/generate_cost_summary.py \
-  --input {output_folder} \
-  --output {output_folder}/cost_report.md
+Write `{iteration_folder}\report.md`, update its manifest, and synchronize
+the root iteration index. Link only actual artifacts.
 
-# Quick estimate for planning
-python tools/cu-cost-estimator/cu_cost_estimator.py estimate \
-  --file-type document \
-  --quantity 1000 \
-  --model gpt-4.1
-```
+| Section | Required evidence |
+|---|---|
+| Hypothesis and changes | Baseline, local defects, expected/actual behavior, verified bugs |
+| Scope | Input/schema hashes, truth/evaluator versions, eligible/held-out counts |
+| Execution | Actual sanitized commands/working directory, tool/API/model/profile versions, observed IDs/statuses |
+| Correctness | Critical fields and case-level gates with units, denominators, rules, sources |
+| Coverage/stability | All planned trials, row/segment retention, failures/retries/exclusions |
+| Diagnostics | Fill/source/confidence distributions where available |
+| Cost and efficiency | Observable timings/usage, cost status/amount/null/currency/basis |
+| Decision | Accept/reject/inconclusive, protected behavior, limitations, next hypothesis |
 
-## Required Parameters
+Record cost for every iteration, including layout, repeats, failures/retries,
+and paid evaluator calls, or disclose omissions. Usage × documented prices is
+estimated; attributable actual charges are measured. Missing evidence is
+unknown with a null amount, never zero.
 
-| Parameter | Scale Eval (1×N) | Stability Eval (N×1) |
-|-----------|------------------|----------------------|
-| `--analyzer-id` | Required | Required |
-| `--input` | Folder with documents | Single document path |
-| `--iterations` | 1 (default) | 10 (recommended) |
-| `--output` | Required | Required |
+STP needs reviewed correct automatic completion over all eligible cases,
+false-accept auditing, human-review/failure rates, and representative holdout
+scope. API success, field fill, or high confidence alone is not STP evidence.
 
-## What to Analyze
+## Modality overlays
 
-### For Scale Evals
-- Fields with low fill rates (< 80%) — coverage gaps
-- Patterns in failed extractions — description improvements needed
-- Edge cases that need handling — document variations
-- Documents that failed completely — format issues
-
-### For Stability Evals
-- Fields that vary between iterations — extraction inconsistency
-- Confidence score variance — may need threshold tuning
-- Potential non-determinism issues — description ambiguity
-- Casing or formatting inconsistencies — normalization needs
-
-## KPIs to Track
-
-| Metric | Description | Target |
-|--------|-------------|--------|
-| Fill Rate | % of documents where field is populated | >80% |
-| Confidence (p50) | Median confidence score | >0.85 |
-| Stability Rate | % of iterations with consistent value (N×1) | >95% |
-| Latency (p95) | Processing time per document | <5s |
-| Cost per doc | Token usage and API costs | Budget-dependent |
-
-## Report Template
-
-After exporting results, create a summary at `{output_folder}/REPORT.md`:
-
-```markdown
-# Eval Report: {analyzer_id}
-
-**Run ID**: {run_id}
-**Eval Type**: {scale|stability}
-**Date**: {timestamp}
-
-## Summary
-
-| Metric | Value |
-|--------|-------|
-| Documents Processed | {count} |
-| Successful | {success_count} |
-| Failed | {fail_count} |
-
-## Fill Rates (Coverage)
-
-| Field | Fill Rate | Confidence (p50) | Notes |
-|-------|-----------|------------------|-------|
-| {field} | {rate}% | {conf} | {notes} |
-
-## Issues Found
-
-{list issues observed}
-
-## Recommendations
-
-{schema improvements — propose specific field description changes}
-```
-
-## Eval-Driven Improvement Loop
-
-When evaluating, follow this pattern:
-1. Read the eval manifest (if exists) or use defaults
-2. Run the appropriate eval (scale or stability)
-3. Export results and generate report
-4. If metrics are below targets, produce an actionable diff plan:
-   - Identify specific fields that need improvement
-   - Propose concrete description changes
-   - Quantify expected KPI deltas
-   - Cite exemplar documents showing the issue
-5. Optionally estimate costs for production deployment
-
-## Output Files
-
-```
-{output_folder}/
-├── metadata.json           # Run configuration and summary
-├── results/
-│   ├── {document}.json     # Result for each document
-│   └── {document}_iter002.json  # (stability eval iterations)
-├── results.csv             # Exported analysis table
-├── results.summary.json    # Fill rates and statistics
-├── cost_report.md          # Cost estimate (if generated)
-└── REPORT.md               # Summary report
-```
-
-## See Also
-
-- Full workflow guide: `.github/skills/eval-cu.skill.md`
-- Video-specific eval: `.github/prompts/evaluate-analyzer-video.prompt.md`
-- Classify-and-route eval: `.github/prompts/classify-and-route-schema.prompt.md`
-- Create analyzer: `.github/prompts/generate-analyzer-schema.prompt.md`
-- Write field descriptions: `.github/prompts/write_schema_fields.prompt.md`
+- [Video](evaluate-analyzer-video.prompt.md): temporal grounding, detection
+  correctness, and raw versus post-processed results.
+- [Routing](classify-and-route-schema.prompt.md): packet/segment boundaries,
+  categories, and per-type extraction.
+- [Schema iteration](../skills/iterate-analyzer-schema.skill.md): promotion
+  gates and the next controlled hypothesis.

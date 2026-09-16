@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "kind": "issue",
+  "id": "case-template",
+  "slug": "analyzer-improvement-case",
+  "title": "Analyzer improvement case",
+  "customer": "Not provided",
+  "owner": "Not provided",
+  "opened": "Not provided",
+  "status": "open",
+  "summary": "Plan a reproduction, evaluate analyzer improvements, and account for each iteration's cost.",
+  "problem": {
+    "expected": "Not provided",
+    "actual": "Not provided",
+    "impact": "Not provided"
+  },
+  "goals": [],
+  "success_criteria": [],
+  "defects": [],
+  "bugs": [],
+  "links": [
+    {
+      "label": "Case overview",
+      "path": "README.md",
+      "role": "overview"
+    },
+    {
+      "label": "Planned baseline report",
+      "path": "iterations/001/report.md",
+      "role": "report"
+    }
+  ],
+  "iterations": [
+    {
+      "id": "001",
+      "path": "iterations/001/manifest.json",
+      "summary": "The selected analyzer can reproduce the reported behavior on the frozen input set.",
+      "result": "Not run; inputs, schema, evaluator, and acceptance criteria have not been supplied.",
+      "status": "planned"
+    }
+  ]
+}

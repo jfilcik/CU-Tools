@@ -1,159 +1,75 @@
----
-status: ✅ IMPLEMENTED
-version: 1.0.0
-last_updated: 2026-01-26
----
-
 # Prompt: Analyze Document Structure
 
-## Goal
+Review CU layout evidence to identify text/structure anchors and propose
+extraction fields. This is an offline review unless new analysis is explicitly
+authorized.
 
-Analyze layout extraction results to understand document structure and identify key fields for extraction.
+## Context to supply
 
-## Context
+- Selected case and `iterations\NNN` (private for customer material).
+- Document type and desired business outcome.
+- Hypothesis/baseline, expected versus actual behavior, local defect IDs, and
+  verified tracking bugs.
+- Frozen input inventory/hashes and saved layout paths.
 
-- **Layout Results Folder**: [Path to layout_results folder with .layout.md and .layout.json files]
-- **Document Type**: [e.g., Invoice, Purchase Order, Contract, Receipt]
-- **Purpose**: [What the customer wants to extract/achieve]
+Follow [iteration workspaces](../../docs/iteration-workspaces.md) for
+manifests/evidence and [Agents.md](../../Agents.md) for technical rules.
+Reuse immutable prior layout when applicable; do not rerun or move evidence
+just to change its folder format.
 
-## Input Files
+## Acquire layout only if needed
 
-Review the following files from the layout results:
-1. `*.layout.md` - Markdown representation of document content
-2. `*.layout.json` - Full layout analysis with structure details
+Official `cu` is the sole execution backend. After approval for the billable
+scope, use this PowerShell template from the repository root:
 
-## Analysis Tasks
-
-### 1. Document Structure Analysis
-
-For each sample document, identify:
-
-**Sections/Regions**:
-- Header area (logos, titles, identifiers)
-- Main content areas
-- Tables and lists
-- Footer/signature areas
-
-**Common Patterns**:
-- Consistent section headers across documents
-- Key-value pair patterns (Label: Value)
-- Tabular data structures
-- Repeating elements
-
-### 2. Key Data Points
-
-Identify data that would be valuable to extract:
-
-| Data Point | Location | Format | Consistency |
-|------------|----------|--------|-------------|
-| {name} | {where found} | {string/number/date/etc} | {always/sometimes/varies} |
-
-Consider:
-- Identifiers (numbers, codes, references)
-- Dates and timestamps
-- Names (people, companies, products)
-- Amounts and quantities
-- Addresses and contact info
-- Line items and lists
-
-### 3. Variations Across Samples
-
-Note differences between documents:
-- Layout variations
-- Missing fields in some documents
-- Different formats for same data
-- Edge cases
-
-### 4. Extraction Challenges
-
-Identify potential difficulties:
-- Data embedded in images/logos
-- Inconsistent formatting
-- Multiple possible locations for same data
-- Ambiguous field boundaries
-
-## Output Format
-
-Provide a structured summary:
-
-```markdown
-## Document Structure Summary
-
-### Document Type: {type}
-
-### Consistent Elements
-- {element 1}
-- {element 2}
-
-### Recommended Extraction Fields
-
-| Field Name | Type | Description | Found In |
-|------------|------|-------------|----------|
-| {name} | {type} | {what it is} | {all/most/some} docs |
-
-### Variations Observed
-- {variation 1}
-- {variation 2}
-
-### Potential Challenges
-- {challenge 1}
-- {challenge 2}
-
-### Recommendations
-- {recommendation for schema design}
+```powershell
+cu analyze "{document_path}" --analyzer prebuilt-layout --json `
+  --api-version 2025-11-01 --yes --on-existing error `
+  --output-dir "{iteration_folder}\outputs\raw\layout" `
+  --report-file "{iteration_folder}\outputs\raw\layout-status.json"
 ```
 
-## Example Analysis
+For ordinary folders follow [Generate Analyzer](../skills/generate-analyzer.skill.md).
+Read native `.result.json` files for structured content and returned markdown.
+The CLI defaults to markdown without `--json`; one call does not promise both
+file formats. Retain legacy saved layout as evidence without relabeling it.
+CLI status reports are not documents and must not enter field statistics.
 
-Given layout results from invoice samples:
+## Review tasks
 
-```markdown
-## Document Structure Summary
+1. **Structure:** headings, identifiers, sections, key-value pairs, tables,
+   lists, signatures, footers, and repeated entities.
+2. **Candidate fields:** identifiers, dates, parties, amounts, addresses, and
+   row-level data. Distinguish extracted values from deterministic derivations.
+3. **Variation:** optional/absent fields, label alternatives, column ordering,
+   continuation pages, languages, and ambiguous formats.
+4. **Challenges:** missing OCR text, separated labels/values, ambiguous party
+   or section ownership, and content only present as an image.
+5. **Evidence:** cite source file/page/segment and exact text anchors. Record
+   suspected causes as hypotheses, not proven processing mechanisms.
 
-### Document Type: Invoice
+Do not describe field sources by colors, fonts, or position alone. A logo
+without corresponding extracted text is an evidence gap, not a reliable text
+anchor. Repeated rows belong in arrays; totals belong at the proper scope.
 
-### Consistent Elements
-- Company logo and name in header (top-left)
-- Invoice number and date (top-right)
-- "Bill To" and "Ship To" sections
-- Line items table with columns: Item, Description, Qty, Price, Total
-- Subtotal, Tax, and Total at bottom
-- Payment terms in footer
+## Required output
 
-### Recommended Extraction Fields
+Write `{iteration_folder}\outputs\evaluation\document-structure.md` with:
 
-| Field Name | Type | Description | Found In |
-|------------|------|-------------|----------|
-| InvoiceNumber | string | Unique invoice identifier (e.g., INV-2024-001) | all docs |
-| InvoiceDate | string | Date invoice was issued | all docs |
-| DueDate | string | Payment due date | most docs |
-| VendorName | string | Name of the company issuing invoice | all docs |
-| BillToName | string | Name of the customer being billed | all docs |
-| BillToAddress | string | Customer billing address | all docs |
-| LineItems | array | List of items with description, qty, price | all docs |
-| Subtotal | number | Sum before tax | all docs |
-| TaxAmount | number | Tax amount | most docs |
-| TotalAmount | number | Final amount due | all docs |
+- Scope and source links, distinguishing new analysis from offline review.
+- Observed common structure and meaningful variations.
+- A field proposal table:
 
-### Variations Observed
-- Some invoices have "Ship To" separate from "Bill To", others combine them
-- Tax shown as percentage in some, amount in others
-- Due date format varies: "Net 30" vs specific date
+| Field | Type/method | Text/structure anchor | Optionality/ambiguity | Source |
+|---|---|---|---|---|
+| InvoiceNumber | string/extract | Invoice Number or Invoice No. near invoice heading | Distinguish from order number | Actual evidence link |
+| LineItems | array of objects/extract | Item, Quantity, Unit Price columns | Preserve continuation rows | Actual evidence link |
 
-### Potential Challenges
-- Vendor name sometimes in logo only (image, not text)
-- Line item table structure varies (different column orders)
-- Some invoices have multiple pages
+The table illustrates design, not measured findings for the current inputs.
 
-### Recommendations
-1. Make DueDate and TaxAmount optional fields
-2. Add clear description for VendorName to check header text area
-3. For LineItems, define flexible schema that handles column variations
-4. Consider adding PageCount field for multi-page tracking
-```
+Include expected/actual defects, cause status, questions evidence cannot
+answer, and a next schema hypothesis. Link the output in manifest/report,
+retain raw results unchanged, and record any layout cost. Missing usage/cost
+stays unknown/null; offline review is not a new extraction result.
 
-## Usage in Workflow
-
-This prompt is used in **Step 3** of the `generate-analyzer.skill.md` workflow, after layout analysis has been run on sample documents.
-
-The output feeds into the schema generation step.
+Continue with [Generate Analyzer Schema](generate-analyzer-schema.prompt.md).

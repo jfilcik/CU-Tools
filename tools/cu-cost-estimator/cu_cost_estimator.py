@@ -19,10 +19,54 @@ usage data for calculations.
 
 import json
 import argparse
+import math
+import sys
 from typing import Dict, List, Tuple, Optional, Any, Union
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from enum import Enum
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cu-results-export"))
+from cu_result_io import load_results, result_usage
+
+
+def _count(value: Any, name: str, *, fractional: bool = False) -> Union[int, float]:
+    """Validate measured quantities without treating absent/invalid values as zero."""
+    if (
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        or not math.isfinite(value) or value < 0
+        or not fractional and not isinstance(value, int)
+    ):
+        raise ValueError(f"{name} must be a finite non-negative {'number' if fractional else 'integer'}")
+    return value
+
+
+def _token_counts(usage: Dict[str, Any]) -> Tuple[int, int, List[str]]:
+    if "tokens" not in usage:
+        for incoming, outgoing in (("inputTokens", "outputTokens"), ("promptTokens", "completionTokens")):
+            if incoming in usage and outgoing in usage:
+                return _count(usage[incoming], incoming), _count(usage[outgoing], outgoing), []
+        raise ValueError("Usage is missing explicit input and output token counts")
+    tokens = usage["tokens"]
+    if not isinstance(tokens, dict) or not tokens:
+        raise ValueError("Usage 'tokens' must contain explicit input and output counts")
+    totals = {"input": 0, "output": 0}
+    directions = set()
+    models = set()
+    for key, value in tokens.items():
+        direction = key.rsplit("-", 1)[-1]
+        if direction not in totals:
+            raise ValueError(f"Unsupported usage token key: {key}; no token direction will be guessed")
+        totals[direction] += _count(value, key)
+        directions.add(direction)
+        if key != direction:
+            models.add(key.rsplit("-", 1)[0])
+    if directions != {"input", "output"}:
+        raise ValueError("Usage requires both input and output token counts (explicit zero is valid)")
+    for model in models:
+        if any(f"{model}-{direction}" not in tokens for direction in totals):
+            raise ValueError(f"Usage requires both input and output counts for {model}")
+    return totals["input"], totals["output"], sorted(models)
 
 
 # Pricing Configuration - based on Azure Content Understanding pricing
@@ -184,6 +228,10 @@ class UsageData:
     audio_minutes: float = 0.0
     video_minutes: float = 0.0
     embedding_tokens: int = 0
+
+    def __post_init__(self):
+        for name, value in asdict(self).items():
+            _count(value, name, fractional=name in {"audio_minutes", "video_minutes"})
     
     @classmethod
     def from_api_response(cls, usage: Dict[str, Any]) -> 'UsageData':
@@ -196,21 +244,24 @@ class UsageData:
         Returns:
             UsageData instance populated from the response
         """
-        tokens = usage.get("tokens", {})
-        
-        # Extract input/output tokens (may be prefixed with model name)
-        input_tokens = 0
-        output_tokens = 0
-        for key, value in tokens.items():
-            if "input" in key.lower():
-                input_tokens += value
-            elif "output" in key.lower():
-                output_tokens += value
+        if not isinstance(usage, dict):
+            raise ValueError("Usage must be an object")
+        input_tokens, output_tokens, _ = _token_counts(usage)
+        ctx_keys = [key for key in ("contextualizationToken", "contextualizationTokens") if key in usage]
+        if not ctx_keys:
+            raise ValueError("Usage is missing contextualization tokens; supply explicit zero if known")
+        if len(ctx_keys) == 2 and usage[ctx_keys[0]] != usage[ctx_keys[1]]:
+            raise ValueError("Conflicting contextualization token counts")
+        if not any(key in usage for key in (
+            "documentPagesMinimal", "documentPagesBasic", "documentPagesStandard",
+            "audioMinutes", "videoMinutes",
+        )):
+            raise ValueError("Usage is missing measured page/minute counts; total cost is unknown")
         
         return cls(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            contextualization_tokens=usage.get("contextualizationToken", 0),
+            contextualization_tokens=usage[ctx_keys[0]],
             document_pages_minimal=usage.get("documentPagesMinimal", 0),
             document_pages_basic=usage.get("documentPagesBasic", 0),
             document_pages_standard=usage.get("documentPagesStandard", 0),
@@ -493,7 +544,7 @@ class CostEstimator:
         """
         embedding_config = self.config["embeddings"].get(embeddings_model)
         if not embedding_config:
-            return 0, 0.0
+            raise ValueError(f"Missing embedding pricing: {embeddings_model}")
         
         unit_key = self.get_unit_key(file_type)
         tokens_per_unit = model["tokens_per_unit"].get(unit_key)
@@ -584,6 +635,8 @@ class CostEstimator:
         Returns:
             Pricing tier string for config lookup
         """
+        if deployment_type not in {"global", "regional", "data_zone", "ptu"}:
+            raise ValueError(f"Unknown deployment pricing: {deployment_type}")
         return "data_zone" if deployment_type == "data_zone" else "global_regional"
     
     def estimate_from_usage(
@@ -613,6 +666,7 @@ class CostEstimator:
             raise ValueError("usage_data is required for usage-based estimation")
         
         usage = request.usage_data
+        _count(scale_factor, "scale_factor", fractional=True)
         model = self.get_model_config(request.model_name)
         if not model:
             raise ValueError(f"Model {request.model_name} not found")
@@ -627,14 +681,11 @@ class CostEstimator:
             usage.document_pages_basic + 
             usage.document_pages_standard
         )
-        if total_pages > 0:
-            ce_cost = (total_pages * scale_factor / 1000) * self.config["ce"]["doc_per_1000_pages"]
-        elif usage.audio_minutes > 0:
-            ce_cost = usage.audio_minutes * scale_factor * self.config["ce"]["audio_per_minute"]
-        elif usage.video_minutes > 0:
-            ce_cost = usage.video_minutes * scale_factor * self.config["ce"]["video_per_minute"]
-        else:
-            ce_cost = self.calculate_content_extraction(request.file_type, request.quantity)
+        ce_cost = scale_factor * (
+            total_pages / 1000 * self.config["ce"]["doc_per_1000_pages"]
+            + usage.audio_minutes * self.config["ce"]["audio_per_minute"]
+            + usage.video_minutes * self.config["ce"]["video_per_minute"]
+        )
         
         # Field Extraction (LLM tokens)
         input_tokens, output_tokens, fe_cost = self.calculate_field_extraction_from_usage(
@@ -650,9 +701,10 @@ class CostEstimator:
         embeddings_cost = 0.0
         if usage.embedding_tokens > 0:
             embedding_config = self.config["embeddings"].get(request.embeddings_model)
-            if embedding_config:
-                scaled_embedding_tokens = usage.embedding_tokens * scale_factor
-                embeddings_cost = (scaled_embedding_tokens / 1000) * embedding_config["price_per_1k_tokens"]
+            if not embedding_config:
+                raise ValueError(f"Missing embedding pricing: {request.embeddings_model}")
+            scaled_embedding_tokens = usage.embedding_tokens * scale_factor
+            embeddings_cost = (scaled_embedding_tokens / 1000) * embedding_config["price_per_1k_tokens"]
         
         total_cost = ce_cost + fe_cost + ctx_cost + embeddings_cost
         total_tokens = input_tokens + output_tokens + ctx_tokens
@@ -668,7 +720,10 @@ class CostEstimator:
             total_tokens=total_tokens,
             units=request.quantity,
             estimation_mode="usage_based",
-            confidence_note="High confidence - based on actual API usage data"
+            confidence_note=(
+                "High confidence in provided usage counts, not billing: estimated with configured "
+                "illustrative rates; excludes discounts and PTU capacity charges."
+            )
         )
     
     def estimate_from_schema(self, request: ProcessingRequest) -> CostBreakdown:
@@ -864,8 +919,8 @@ class CostEstimator:
             explanation.append("    " + breakdown.confidence_note)
             explanation.append("")
         elif breakdown.estimation_mode == "usage_based":
-            explanation.append("✅ ESTIMATION MODE: Usage-based (high accuracy)")
-            explanation.append("    Based on actual API usage data from test runs")
+            explanation.append("ESTIMATION MODE: Usage-based pricing scenario (not actual spend)")
+            explanation.append("    " + breakdown.confidence_note)
             explanation.append("")
         else:
             explanation.append("ℹ️  ESTIMATION MODE: Default estimates")
@@ -1005,13 +1060,22 @@ class CostEstimator:
         """
         if not results:
             return {"error": "No results provided"}
+        for index, result in enumerate(results):
+            required = {"pages", "actual_input_tokens", "actual_output_tokens", "model_name"}
+            if not isinstance(result, dict) or required - result.keys():
+                raise ValueError(f"Batch record {index} requires {', '.join(sorted(required))}")
+            for name in ("pages", "actual_input_tokens", "actual_output_tokens"):
+                _count(result[name], f"record {index}.{name}")
+            if not self.get_model_config(result["model_name"]):
+                raise ValueError(f"Missing model pricing for record {index}: {result['model_name']}")
+            self.get_pricing_tier(result.get("deployment_type", "global"))
         
         total_pages = sum(r.get("pages", 0) for r in results)
         total_input_tokens = sum(r.get("actual_input_tokens", 0) for r in results)
         total_output_tokens = sum(r.get("actual_output_tokens", 0) for r in results)
         total_docs = len(results)
         
-        # Calculate actual costs based on the model and tokens used
+        # This legacy input is an explicit CE + field-extraction pricing scenario.
         total_cost = 0.0
         for result in results:
             model = self.get_model_config(result.get("model_name", "gpt-4o"))
@@ -1023,7 +1087,8 @@ class CostEstimator:
             
             input_cost = (result.get("actual_input_tokens", 0) / 1_000_000) * model["pricing"][pricing_tier]["input_per_mtok"]
             output_cost = (result.get("actual_output_tokens", 0) / 1_000_000) * model["pricing"][pricing_tier]["output_per_mtok"]
-            total_cost += input_cost + output_cost
+            if deployment_type != "ptu":
+                total_cost += input_cost + output_cost
             
             # Add CE cost
             file_type = result.get("file_type", "document")
@@ -1038,6 +1103,11 @@ class CostEstimator:
         avg_total_tokens_per_page = (total_input_tokens + total_output_tokens) / total_pages if total_pages > 0 else 0
         
         analysis = {
+            "estimation_mode": "usage_based_partial_components",
+            "pricing_note": (
+                "Estimated CE and field-extraction costs only, not actual spend. "
+                "Contextualization, embeddings and PTU capacity charges are excluded."
+            ),
             "summary": {
                 "total_documents": total_docs,
                 "total_pages": total_pages,
@@ -1071,6 +1141,8 @@ class CostEstimator:
                 pricing_tier = self.get_pricing_tier(deployment_type)
                 doc_cost = (input_tokens / 1_000_000) * model["pricing"][pricing_tier]["input_per_mtok"]
                 doc_cost += (output_tokens / 1_000_000) * model["pricing"][pricing_tier]["output_per_mtok"]
+                if deployment_type == "ptu":
+                    doc_cost = 0.0
                 
                 # Add CE cost
                 file_type = result.get("file_type", "document")
@@ -1106,7 +1178,8 @@ class CostEstimator:
         averages = analysis["averages"]
         
         explanation = []
-        explanation.append("Batch Processing Analysis")
+        explanation.append("Batch Processing Cost Estimate (not actual spend)")
+        explanation.append(analysis.get("pricing_note", ""))
         explanation.append("=" * 70)
         explanation.append("")
         
@@ -1114,7 +1187,7 @@ class CostEstimator:
         explanation.append("Overall Summary:")
         explanation.append(f"  • Processed {summary['total_documents']} documents")
         explanation.append(f"  • Total pages: {summary['total_pages']:,}")
-        explanation.append(f"  • Total cost: ${summary['total_cost']:.2f}")
+        explanation.append(f"  • Estimated covered components: ${summary['total_cost']:.2f}")
         explanation.append(f"  • Total tokens: {summary['total_tokens']:,}")
         explanation.append("")
         
@@ -1170,7 +1243,7 @@ class CostEstimator:
         return "\n".join(explanation)
 
 
-def extract_usage_from_cu_output(filepath: str) -> Optional[Dict[str, Any]]:
+def extract_usage_from_cu_output(filepath: str) -> Dict[str, Any]:
     """
     Extract usage data from Azure Content Understanding analyzer output JSON.
     
@@ -1192,68 +1265,45 @@ def extract_usage_from_cu_output(filepath: str) -> Optional[Dict[str, Any]]:
         filepath: Path to CU analyzer output JSON file
         
     Returns:
-        Dict with extracted usage data compatible with CostEstimator, or None if not found
+        Dict with extracted usage data compatible with CostEstimator.
+        Missing or incomplete structured usage raises ValueError.
         
     Raises:
         FileNotFoundError: If file doesn't exist
-        json.JSONDecodeError: If file is not valid JSON
-        ValueError: If usage object is malformed
+        ValueError: If the result or usage is missing/malformed
     """
-    with open(filepath, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    
-    # Extract usage object
-    if 'usage' not in data:
-        raise ValueError(f"No 'usage' object found in {filepath}. Invalid CU analyzer output format.")
-    
-    usage = data['usage']
-    
-    # Validate required fields
-    if 'tokens' not in usage or not isinstance(usage['tokens'], dict):
-        raise ValueError(f"Usage object missing 'tokens' dict in {filepath}")
-    
-    # Extract model tokens
-    tokens_dict = usage['tokens']
-    
-    # Find input/output tokens (handle various naming conventions)
-    input_tokens = 0
-    output_tokens = 0
-    
-    for key, value in tokens_dict.items():
-        if isinstance(value, int):
-            # Single token count (flat format) - shouldn't happen but handle it
-            continue
-        # Multi-token format (nested) - shouldn't happen based on observed data
-        
-    # Try to find input and output tokens with model names
-    for model_key in tokens_dict:
-        if 'input' in model_key.lower():
-            input_tokens += tokens_dict[model_key]
-        elif 'output' in model_key.lower():
-            output_tokens += tokens_dict[model_key]
-        # Other token types (embeddings, etc.) are handled separately if needed
-    
-    # If we couldn't find explicit input/output keys, assume the tokens are for the main model
-    if input_tokens == 0 and output_tokens == 0:
-        # Count all tokens except known embeddings
-        for model_key, value in tokens_dict.items():
-            if 'embedding' not in model_key.lower():
-                # Assume first token is input, others are output (shouldn't happen with standard format)
-                if input_tokens == 0:
-                    input_tokens = value
-                else:
-                    output_tokens = value
-    
-    context_tokens = usage.get('contextualizationTokens', 0)
-    pages = usage.get('documentPagesStandard', 0)
-    
+    path = Path(filepath)
+    if not path.is_file():
+        raise FileNotFoundError(f"Result file not found: {filepath}")
+    return extract_usage_from_result(load_results(path)[0], source_file=str(path))
+
+
+def extract_usage_from_result(data: Dict[str, Any], source_file: str = "") -> Dict[str, Any]:
+    """Read measured usage only; absent/incomplete usage raises ``ValueError``.
+
+    Supports ``usage`` at the direct native root or on/inside native LRO and
+    saved CU-Tools result envelopes.
+    No counts, timings or models are inferred from extracted text, console
+    output or CLI status reports.
+    """
+    raw_usage = result_usage(data)
+    if raw_usage is None:
+        raise ValueError("No structured usage is present; native CLI result/report JSON may omit it")
+    usage = UsageData.from_api_response(raw_usage)
+    _, _, models = _token_counts(raw_usage)
     return {
-        'input_tokens': input_tokens,
-        'output_tokens': output_tokens,
-        'contextualization_tokens': context_tokens,
-        'document_pages': pages,
-        'source_file': filepath
+        **asdict(usage),
+        "document_pages": (
+            usage.document_pages_minimal + usage.document_pages_basic + usage.document_pages_standard
+        ),
+        "models": models,
+        "source_file": source_file or data.get("_metadata", {}).get("result_file", ""),
     }
+
+
+def usage_data_from_extracted(data: Dict[str, Any]) -> UsageData:
+    """Convert the extraction helper's compatibility dictionary to measured usage."""
+    return UsageData(**{name: data[name] for name in UsageData.__dataclass_fields__})
 
 
 def main():
@@ -1264,18 +1314,18 @@ def main():
         epilog="""
 Examples:
   # Estimate cost for 1000 document pages (default estimation)
-  python -m tools.cost_estimator estimate --file-type document --quantity 1000 --model gpt-4o
+  python cu_cost_estimator.py estimate --file-type document --quantity 1000 --model gpt-4o
   
   # Estimate with schema configuration (rough estimate)
-  python -m tools.cost_estimator estimate --file-type document --quantity 1000 \\
+  python cu_cost_estimator.py estimate --file-type document --quantity 1000 \\
       --model gpt-4o-mini --schema-fields 10 --schema-complexity moderate
   
   # Estimate from actual usage data (most accurate)
-  python -m tools.cost_estimator estimate-usage --input-tokens 1100000 --output-tokens 60000 \\
+  python cu_cost_estimator.py estimate-usage --input-tokens 1100000 --output-tokens 60000 \\
       --ctx-tokens 1000000 --pages 1000 --model gpt-4o-mini
   
   # Analyze batch processing results
-  python -m tools.cost_estimator analyze --results-file batch_results.json
+  python cu_cost_estimator.py analyze --results-file batch_results.json
         """
     )
     
@@ -1322,12 +1372,12 @@ Examples:
                                     help="Input tokens from API usage")
     usage_parser.add_argument("--output-tokens", type=int,
                              help="Output tokens from API usage (required if --input-tokens used)")
-    usage_parser.add_argument("--ctx-tokens", type=int, default=0,
-                             help="Contextualization tokens from API usage")
-    usage_parser.add_argument("--pages", type=int, default=0,
-                             help="Number of document pages")
-    usage_parser.add_argument("--model", default="gpt-4o",
-                             help="Model name (default: gpt-4o)")
+    usage_parser.add_argument("--ctx-tokens", type=int,
+                             help="Measured contextualization tokens; required with --input-tokens (zero allowed)")
+    usage_parser.add_argument("--pages", type=int,
+                             help="Measured document pages; required with --input-tokens (zero allowed)")
+    usage_parser.add_argument("--model",
+                             help="Explicit model pricing; otherwise inferred only from measured token keys")
     usage_parser.add_argument("--deployment", default="global",
                              choices=["global", "regional", "data_zone", "ptu"],
                              help="Deployment type (default: global)")
@@ -1401,24 +1451,22 @@ Examples:
             # Load from CU analyzer output file
             try:
                 usage_dict = extract_usage_from_cu_output(args.cu_output)
-                usage = UsageData(
-                    input_tokens=usage_dict['input_tokens'],
-                    output_tokens=usage_dict['output_tokens'],
-                    contextualization_tokens=usage_dict['contextualization_tokens'],
-                    document_pages_standard=usage_dict['document_pages']
-                )
+                usage = usage_data_from_extracted(usage_dict)
                 pages = usage_dict['document_pages']
-                print(f"Extracted usage from: {args.cu_output}")
-                print(f"  Pages: {pages}, Input tokens: {usage.input_tokens}, Output tokens: {usage.output_tokens}\n")
+                models = usage_dict["models"]
+                if len(models) > 1:
+                    raise ValueError("Multiple measured models require separate pricing; split usage by model")
+                if models and args.model and models != [args.model]:
+                    raise ValueError("--model does not match the measured token model")
+                args.model = args.model or (models[0] if models else None)
             except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
-                print(f"Error reading CU output file: {e}", file=__import__('sys').stderr)
-                return
+                parser.error(f"Error reading CU output file: {e}")
         else:
             # Use command-line arguments
-            if not args.input_tokens or not args.output_tokens:
-                print("Error: Either --cu-output or both --input-tokens and --output-tokens are required", 
-                      file=__import__('sys').stderr)
-                return
+            if args.input_tokens is None or args.output_tokens is None:
+                parser.error("Either --cu-output or both --input-tokens and --output-tokens are required")
+            if args.ctx_tokens is None or args.pages is None:
+                parser.error("Explicit usage requires --ctx-tokens and --pages; use zero only when known")
             
             usage = UsageData(
                 input_tokens=args.input_tokens,
@@ -1427,6 +1475,11 @@ Examples:
                 document_pages_standard=args.pages
             )
             pages = args.pages
+
+        if not args.model:
+            parser.error("Model pricing is unknown; provide --model explicitly")
+        if args.scale_to > 0 and pages == 0:
+            parser.error("Cannot scale to pages when measured pages are zero")
         
         # Determine scale
         target_pages = args.scale_to if args.scale_to > 0 else pages
@@ -1440,7 +1493,10 @@ Examples:
             usage_data=usage
         )
         
-        breakdown = estimator.estimate_from_usage(request, scale_factor=scale_factor)
+        try:
+            breakdown = estimator.estimate_from_usage(request, scale_factor=scale_factor)
+        except (KeyError, ValueError) as exc:
+            parser.error(str(exc))
         
         if args.json:
             output = {

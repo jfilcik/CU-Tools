@@ -1,438 +1,179 @@
 ---
-status: ✅ IMPLEMENTED
-version: 1.0.0
-last_updated: 2026-04-07
+name: generate-analyzer-classify-route
+description: Designs and tests mixed-document CU pipelines with an offline dependency plan and explicit official cu creation, analysis, and cleanup. Use when different packet types need different field schemas.
 ---
 
-# Skill: Generate Analyzer – Classify-and-Route (Advanced Pattern)
+# Skill: Generate Analyzer — Classify-and-Route
 
-Guided workflow to create a multi-analyzer pipeline that **classifies** document types and **routes** each to a specialized field-extraction analyzer.
+Use for packets containing distinct document types that need different
+extraction schemas. For one type, use [standard generation](generate-analyzer.skill.md).
+Technical routing rules belong in [Agents.md §4.7](../../Agents.md#47-classify-and-route-pattern-contentcategories);
+the [schema prompt](../prompts/classify-and-route-schema.prompt.md) is a concise
+design checklist.
 
-> **Standard pattern first**: If you are working with a single document type, use
-> `generate-analyzer.skill.md` instead. This skill is for document packets that contain
-> **multiple distinct document types** in the same PDF or batch.
+## 1. Freeze the pipeline experiment
 
-## Purpose
+Follow [Iterate Analyzer Schema](iterate-analyzer-schema.skill.md) and
+[iteration workspaces](../../docs/iteration-workspaces.md). Select
+`case\iterations\NNN`; keep customer packets private. Record hypothesis,
+baseline, expected/actual defects, verified bugs, input hashes, reviewed truth,
+and evaluator/acceptance rules. Freeze all inner and outer schema sources.
 
-Help users design and deploy a classify-and-route pipeline that:
-1. Identifies the document types present in your packet
-2. Creates inner (field-extraction) analyzers for each type
-3. Creates an outer (classifier) analyzer that routes pages to the right inner analyzer
-4. Tests the full pipeline end-to-end
+Predeclare layout, individual-inner checks, and mixed-packet tests as phases
+with separate raw output directories. Obtain explicit cost approval for all
+phases and any repeats. New schemas, scope, or metrics require a new number.
 
-## When to Use
+## 2. Identify types and design schemas
 
-- A single PDF or batch contains **multiple document types** (e.g., vehicle titles + registrations)
-- Different document types require **different extraction fields**
-- You need to **classify first**, then extract fields per-type
-- You are processing a production corpus where documents are mixed in unknown order
+Inspect saved layout or use the approved native layout command in
+[standard generation](generate-analyzer.skill.md). Identify text headings,
+labels, section transitions, and type-distinguishing anchors. Do not classify
+documents by colors, fonts, or position alone.
 
-## When NOT to Use
+Create one ordinary field schema per type. Keep document-level totals separate
+from line-item arrays and define source/null behavior. The outer schema uses
+`enableSegment: true` and `contentCategories`; it needs no `fieldSchema`
+when all extraction is delegated. Classification-only categories omit
+`analyzerId`.
 
-- All documents share the same structure and fields → use `generate-analyzer.skill.md`
-- You only need to classify (no field extraction) → consider a simpler schema with a single analyzer
-- You're just getting started with CU → learn the standard pattern first
+Use **source aliases** for local dependencies, not guessed deployment IDs.
+For `packet.json`, referencing supplied aliases `invoice` and `receipt`:
 
-## How It Works (Two-Stage + Routing)
-
-CU's two-stage pipeline applies here too:
-
-```
-Stage 1: OCR/Layout runs on the entire document packet
-         ↓
-Stage 2 (Classifier): GPT-4.1 segments the packet and classifies each segment
-         ↓
-Stage 2 (Inner Analyzers): GPT-4.1 extracts fields from each classified segment
-```
-
-**Key constraint**: Classification descriptions must use **text anchors** (headings, labels,
-keywords found in OCR output), NOT visual appearance (colors, fonts, layout positions).
-
-## Reference Example
-
-`Issues/Carvana/` — Vehicle title + registration packets:
-- Inner: `vehicle_title_extractor` (title-specific fields)  
-- Inner: `vehicle_registration_extractor` (registration-specific fields)
-- Outer: `vehicle_docs_classifier` (classifies pages and routes them)
-
----
-
-## Workflow Steps
-
-### Step 1: Identify Document Types in the Packet
-
-**User Action**: Provide sample document packets and describe the document types present.
-
-**Questions to answer**:
-- How many distinct document types are in your packets?
-- Do all packets contain all types, or are types optional?
-- Can a single packet have multiple pages of the same type?
-
-**Layout analysis across all types**:
-```bash
-python tools/cu-analyzer-run/run.py \
-  --layout \
-  --input {sample_folder} \
-  --output {project_folder}/layout_results
-```
-
-Review the `.layout.md` files to identify type-distinguishing text patterns:
-- What headings or titles uniquely identify each document type?
-- What labels or keywords appear only in one type?
-- Are there structured fields that appear in only one type?
-
-**Output**: A list of document types with distinguishing text characteristics.
-
----
-
-### Step 2: Create Inner Analyzer Schemas (One Per Document Type)
-
-For each document type, create a standard field-extraction schema following `generate-analyzer.skill.md`.
-
-**Inner schema structure**:
 ```json
 {
-  "description": "Extract fields from [document type]",
-  "baseAnalyzerId": "prebuilt-document",
-  "scenario": "document",
-  "config": {
-    "returnDetails": true,
-    "estimateFieldSourceAndConfidence": true
-  },
-  "models": {
-    "completion": "gpt-4.1"
-  },
-  "fieldSchema": {
-    "fields": {
-      "FieldName": {
-        "type": "string",
-        "method": "extract",
-        "description": "Clear text-based description of the field",
-        "estimateSourceAndConfidence": true
-      }
-    }
-  }
-}
-```
-
-**Naming convention**: `{project_folder}/schemas/{type}_extractor_v1.json`
-
-**Example for two types**:
-```
-schemas/
-├── invoice_extractor_v1.json      # Invoice fields
-└── receipt_extractor_v1.json      # Receipt fields
-```
-
----
-
-### Step 3: Test Inner Analyzers Individually
-
-**Critical**: Test each inner analyzer on its own document type *before* building the classifier.
-
-```bash
-# Test invoice extractor
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema {project_folder}/schemas/invoice_extractor_v1.json \
-  --input {project_folder}/samples/invoices/ \
-  --output {project_folder}/test_results/invoice_extractor_v1 \
-  --keep-analyzer
-
-# Test receipt extractor
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema {project_folder}/schemas/receipt_extractor_v1.json \
-  --input {project_folder}/samples/receipts/ \
-  --output {project_folder}/test_results/receipt_extractor_v1 \
-  --keep-analyzer
-```
-
-> Use `--keep-analyzer` to retain inner analyzers — the classifier will reference them by ID.
-
-**Note the analyzer IDs** from the test output or `metadata.json`. You'll need them in Step 5.
-
-**Success criteria before proceeding**:
-- Fill rate >80% for key fields in each inner analyzer
-- No obvious mis-extractions on the sample set
-
----
-
-### Step 4: Export Individual Results
-
-```bash
-python tools/cu-results-export/export.py \
-  --input {project_folder}/test_results/invoice_extractor_v1 \
-  --output {project_folder}/test_results/invoice_extractor_v1/results.csv
-
-python tools/cu-results-export/export.py \
-  --input {project_folder}/test_results/receipt_extractor_v1 \
-  --output {project_folder}/test_results/receipt_extractor_v1/results.csv
-```
-
-Review the CSVs to confirm field extraction quality before proceeding.
-
----
-
-### Step 5: Create the Classifier (Outer Analyzer) Schema
-
-The outer analyzer only classifies — it has no `fieldSchema`. It uses `config.contentCategories`
-with descriptions that tell GPT-4.1 how to tell document types apart.
-
-**Outer schema structure**:
-```json
-{
-  "description": "Classify document types and route to specialized extractors",
+  "description": "Classify invoice and receipt segments and route their fields",
   "baseAnalyzerId": "prebuilt-document",
   "config": {
     "enableSegment": true,
     "contentCategories": {
       "invoice": {
-        "description": "Classify as 'invoice' when the document contains text like 'Invoice', 'Invoice Number', line items with unit prices, and a total amount due. Often has 'Bill To' and 'Ship To' sections.",
-        "analyzerId": "invoice_extractor_XXXXXXXX"
+        "description": "Invoice heading, Invoice Number label, item prices, and Amount Due or Total identify an invoice segment.",
+        "analyzerId": "invoice"
       },
       "receipt": {
-        "description": "Classify as 'receipt' when the document contains 'Receipt', transaction date, and payment confirmation text. May include 'Thank you for your purchase' or similar language.",
-        "analyzerId": "receipt_extractor_XXXXXXXX"
+        "description": "Receipt heading, transaction date, payment confirmation, and amount paid identify a receipt segment.",
+        "analyzerId": "receipt"
       },
       "other": {
-        "description": "Classify as 'other' when the document does not match invoice or receipt patterns. No field extraction will be performed."
+        "description": "Content that lacks the distinguishing invoice or receipt anchors; classify without field extraction."
       }
     },
     "omitContent": true
   },
-  "models": {
-    "completion": "gpt-4.1"
-  }
+  "models": { "completion": "gpt-4.1" }
 }
 ```
 
-**Rules for category descriptions**:
-- ✅ Use text anchors: `'Invoice Number'`, `'Bill To'`, `'Receipt'`
-- ✅ Describe distinguishing keywords and phrases from OCR output
-- ✅ Include what's unique to this type vs other types
-- ❌ No visual descriptions: no colors, fonts, layout positions
+For complex packets, contrast the closest confusable types and define
+continuation-page cues. Do not add unnecessary routing depth or assume document
+nesting rules apply to video.
 
-**Save as**: `{project_folder}/schemas/{project}_classifier_v1.json`
+## 3. Build and review the offline dependency plan
 
-**Replace the `analyzerId` placeholders** with the actual IDs captured in Step 3.
+From the repository root:
 
----
-
-### Step 6: Validate the Classifier Schema
-
-```bash
-python tools/cu-analyzer-validate/cu_analyzer_validator.py \
-  {project_folder}/schemas/{project}_classifier_v1.json
+```powershell
+python tools\cu-schema-plan\schema_plan.py `
+  --schema "invoice={iteration_folder}\inputs\schemas\invoice.json" `
+  --schema "receipt={iteration_folder}\inputs\schemas\receipt.json" `
+  --schema "packet={iteration_folder}\inputs\schemas\packet.json" `
+  --id-prefix invoice_001 --api-version 2025-11-01 `
+  --output "{iteration_folder}\inputs\schemas\resolved"
 ```
 
-The validator checks that `contentCategories` are properly formed and that `enableSegment` is set.
+The output directory must be new. Optional `--profile NAME` is recorded in
+commands; `--external EXISTING_ID` explicitly permits a pre-existing dependency
+without creating or owning it. The planner patches supplied aliases in
+`baseAnalyzerId` and `contentCategories` to prefixed IDs, validates locally,
+and snapshots/hashes resolved schemas. It makes **no service calls**.
 
----
+Review `plan.json`: dependencies, unique IDs, final schema hashes, API/profile,
+warnings, dependency-first `commands.create`, and reverse `commands.delete`.
+Those are argument arrays relative to the plan directory, not executed work.
+Validate the resolved snapshots with `cu analyzer validate ... --spec` too.
+Offline validation does not establish external analyzer availability, model
+mappings, resource permissions, or service acceptance.
 
-### Step 7: Create the Classifier and Test the Full Pipeline
+## 4. Create with official `cu`
 
-```bash
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema {project_folder}/schemas/{project}_classifier_v1.json \
-  --input {project_folder}/samples/mixed_packets/ \
-  --output {project_folder}/test_results/classifier_v1 \
-  --keep-analyzer
+Inner analyzers must exist before the outer analyzer. Review and run the
+plan's ordered create commands from its directory. For an authorized sequence,
+this PowerShell loop stops on the first failure:
+
+```powershell
+Push-Location "{iteration_folder}\inputs\schemas\resolved"
+try {
+    $plan = Get-Content -Raw .\plan.json | ConvertFrom-Json
+    foreach ($command in $plan.commands.create) {
+        $executable = $command[0]
+        $arguments = @($command | Select-Object -Skip 1)
+        & $executable @arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Creation failed; stop and inspect before any further service operation."
+        }
+        Add-Content -Path .\created-analyzers.txt -Value $command[4]
+    }
+}
+finally {
+    Pop-Location
+}
 ```
 
-Use **mixed-document packets** (PDFs or batches containing multiple document types) for this test.
+Use the official executable from the configured environment, not another
+program named `cu`. Record creation evidence and observed IDs. Do not rerun
+the sequence to replace IDs. After an uncertain failure, inspect state before
+retry or cleanup; the planned ID list is not proof those analyzers were created.
 
----
+## 5. Test inners, then the full packet
 
-### Step 8: Export and Analyze Full Pipeline Results
+Test each inner on its own frozen type before **analyzing** mixed packets
+through the outer. Keep analyzers available for their dependents. Each source
+must be an input-only staging folder matching the frozen selection; keep
+manifests, schemas, and outputs outside it. Use repeated `--file FILE` selectors
+instead when staging is unnecessary; do not rely on beta discovery filters.
 
-```bash
-python tools/cu-results-export/export.py \
-  --input {project_folder}/test_results/classifier_v1 \
-  --output {project_folder}/test_results/classifier_v1/results.csv
+```powershell
+cu analyze --source "{invoice_samples}" `
+  --analyzer invoice_001_invoice --json --api-version 2025-11-01 `
+  --output-dir "{iteration_folder}\outputs\raw\invoice" `
+  --report-file "{iteration_folder}\outputs\raw\invoice-status.json" `
+  --concurrency 3 --yes --on-existing error
 ```
 
-The exported CSV will include a `category` column showing how each segment was classified.
+Repeat for `invoice_001_receipt` with its own samples/output/report. Proceed
+only after reviewed inner correctness meets the predeclared gates:
 
-**Review for**:
-- **Classification accuracy**: Are segments classified into the correct category?
-- **Extraction quality**: Are fields from inner analyzers populated correctly?
-- **"other" rate**: High rate suggests unrecognized document types or poor category descriptions
-
----
-
-### Step 9: Iterate
-
-#### If classification is inaccurate:
-- Revise the `description` in `contentCategories` for the confused categories
-- Add more distinguishing text anchors
-- Create `{project}_classifier_v2.json` with improved descriptions
-
-#### If extraction quality is low for a specific type:
-- Improve that inner analyzer schema (follow `generate-analyzer.skill.md` iteration)
-- Note: changing an inner analyzer requires the classifier to still reference the same analyzer ID;
-  if you create a new inner analyzer, update the classifier schema with the new ID
-
----
-
-## Example Session
-
-```
-User: I have packets of vehicle documents. Each packet is a multi-page PDF that 
-      contains a vehicle title and a vehicle registration. I need to extract 
-      different fields from each.
-
-Copilot: This is a great fit for the classify-and-route pattern. Here's the plan:
-
-  1. Analyze layout of sample packets to identify distinguishing text
-  2. Create inner analyzers: title_extractor and registration_extractor
-  3. Test each inner analyzer on its own document type
-  4. Create outer classifier referencing both inner analyzers
-  5. Test the full pipeline on mixed packets
-
-Step 1: Running layout analysis on your samples...
-[Runs layout analysis]
-
-From the layout results I can see:
-- Vehicle titles contain: "CERTIFICATE OF TITLE", "Odometer Reading", "Vehicle Identification Number"
-- Registrations contain: "REGISTRATION CARD", "Expires", "License Plate Number"
-
-I'll use those as category descriptions. Creating inner analyzer schemas...
-[Creates title_extractor_v1.json and registration_extractor_v1.json]
-
-Step 3: Testing inner analyzers...
-  title_extractor: 100% fill rate on 5 title samples ✓
-  registration_extractor: 90% fill rate on 5 registration samples ✓
-
-Inner analyzer IDs:
-  title_extractor_20260407_abc123
-  registration_extractor_20260407_def456
-
-Step 5: Creating classifier schema...
-[Creates vehicle_docs_classifier_v1.json with category descriptions and analyzer IDs]
-
-Step 7: Testing full pipeline on mixed packets...
-  Classified: 10/10 segments correctly ✓
-  Extractions: title fields 100%, registration fields 90% ✓
-
-Results exported to test_results/classifier_v1/results.csv
+```powershell
+cu analyze --source "{mixed_packets}" `
+  --analyzer invoice_001_packet --json --api-version 2025-11-01 `
+  --output-dir "{iteration_folder}\outputs\raw\packet" `
+  --report-file "{iteration_folder}\outputs\raw\packet-status.json" `
+  --concurrency 3 --yes --on-existing error
+python tools\cu-results-export\export.py `
+  --input "{iteration_folder}\outputs\raw\packet" `
+  --output "{iteration_folder}\outputs\evaluation\packet.csv"
 ```
 
----
+Apply `--profile NAME` consistently if selected. For stability use the
+explicit-file experiment helper in [Eval CU](eval-cu.skill.md), not another
+pipeline executor.
 
-## Output Artifacts
+## 6. Evaluate, report, and clean up
 
-```
-Issues/{project}/
-├── samples/
-│   ├── titles/                         # Title-only samples (for inner analyzer testing)
-│   ├── registrations/                  # Registration-only samples
-│   └── mixed_packets/                  # Full packets (for classifier testing)
-├── layout_results/
-├── schemas/
-│   ├── title_extractor_v1.json         # Inner analyzer: titles
-│   ├── registration_extractor_v1.json  # Inner analyzer: registrations
-│   └── vehicle_docs_classifier_v1.json # Outer analyzer: classifier
-├── test_results/
-│   ├── title_extractor_v1/             # Individual type test results
-│   ├── registration_extractor_v1/      # Individual type test results
-│   └── classifier_v1/                  # Full pipeline test results
-│       ├── metadata.json
-│       ├── packet1.json
-│       └── results.csv
-└── reports/
-```
+Review packet/segment boundaries, correct categories, classification-only
+segments, per-category fields, row retention, and reviewed case acceptance.
+An elevated `other` rate suggests a hypothesis, not a known cause. Report
+denominators, false accepts, review/failures, protected behavior, and holdout
+limits; category/fill scores alone are not STP.
 
----
+Preserve native raw results and CLI reports. Reports describe input statuses,
+not guaranteed latency/usage or correctness. Missing usage/cost stays unknown;
+price-based costs are estimated. Include inner checks, layout, routed calls,
+and failed/repeated attempts in cost scope. Finish manifest/report and root
+navigation with evidence-backed expected/actual findings and bug links.
 
-## Deployment Sequence (REQUIRED ORDER)
-
-> Inner analyzers MUST exist before the classifier is created.
-> The classifier schema directly references inner analyzer IDs.
-
-```
-1. Create inner analyzers (title_extractor, registration_extractor)
-2. Note their analyzer IDs
-3. Update classifier schema with real IDs
-4. Create classifier analyzer
-5. Submit full packets to classifier
-```
-
----
-
-## Edge Cases & Workarounds
-
-Consult this section only when you hit one of these situations. The workflow steps above cover the happy path.
-
-### High "other" classification rate
-**Cause**: Category descriptions lack distinguishing text anchors, or the packet contains an unrecognized document type.
-**Fix**: Inspect `.layout.md` for the mis-classified segments, add the unique headings/labels to the matching category `description`, and re-create the classifier as `_v2`.
-
-### Two similar types get confused
-**Cause**: Overlapping keywords across category descriptions.
-**Fix**: Add contrastive anchors — describe what is unique to each type *versus* the other ("contains 'Registration Card' but NOT 'Certificate of Title'").
-
-### Classifier references a stale analyzer ID
-**Cause**: An inner analyzer was re-created (new ID) but the classifier schema still points at the old ID.
-**Fix**: Re-capture the inner analyzer IDs, update the `analyzerId` values in the classifier schema, and re-create the classifier. Inner analyzers must always exist before the classifier (see Deployment Sequence).
-
-### Nesting depth / recursive routing limits
-**Cause**: Attempting to nest classifiers many levels deep, or applying document nesting rules to video.
-**Fix**: Review depth limits in `classify-and-route-schema.prompt.md`. Note video supports only **1 level** of classification (see `generate-analyzer-video.skill.md`).
-
----
-
-## Related Skill
-
-- `generate-analyzer.skill.md` — Standard single-type analyzer (start here if new to CU)
-
-## Related Prompts
-
-- `classify-and-route-schema.prompt.md` — Schema design rules and nesting depth limits
-- `analyze-document-structure.prompt.md` — Understand document layout
-- `generate-analyzer-schema.prompt.md` — Generate field schemas for inner analyzers
-- `write_schema_fields.prompt.md` — Write individual field descriptions
-- `evaluate-analyzer.prompt.md` — Core eval workflow for testing pipeline results
-
-## Related Tools
-
-- `cu-analyzer-run/run.py` — Layout extraction and batch analysis
-- `cu-analyzer-run/create_and_test.py` — Create and test each analyzer
-- `cu-results-export/export.py` — Export results (includes `category` column for classify-and-route)
-- `cu-analyzer-validate/cu_analyzer_validator.py` — Validate schemas before creation
-
-## Technical Reference
-
-For full API rules, error handling, and edge cases, see **Agents.md § 4.7 — Classify-and-Route Pattern**.
-
-## Success Criteria
-
-This skill is complete when:
-1. ✅ Inner analyzers tested individually with >80% fill rate on their document type
-2. ✅ Classifier schema created with text-anchor category descriptions and correct analyzer IDs
-3. ✅ Full pipeline tested on mixed-packet samples
-4. ✅ Classification accuracy verified (check `category` column in exported CSV)
-5. ✅ Results exported and reviewed
-
-## Quick Reference — Full Workflow
-
-```bash
-# 1. Layout analysis on all sample types
-python tools/cu-analyzer-run/run.py --layout --input samples/ --output layout_results/
-
-# 2. Create + test inner analyzers (one per document type), keep them
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/type1_extractor_v1.json --input samples/type1/ \
-  --output test_results/type1 --keep-analyzer
-
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/type2_extractor_v1.json --input samples/type2/ \
-  --output test_results/type2 --keep-analyzer
-
-# 3. Update classifier schema with real inner analyzer IDs, then create + test
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/classifier_v1.json --input samples/mixed_packets/ \
-  --output test_results/classifier_v1
-
-# 4. Export pipeline results (includes category column)
-python tools/cu-results-export/export.py \
-  --input test_results/classifier_v1 --output test_results/classifier_v1/results.csv
-```
+Review reverse-order cleanup commands and execute only for actually-created,
+owned IDs, with explicit authorization; retain confirmation by default.
+Never delete external/pre-existing analyzers or every planned ID after an
+uncertain failure. A new inner version requires a newly resolved outer version;
+do not mutate a completed pipeline or its snapshots.

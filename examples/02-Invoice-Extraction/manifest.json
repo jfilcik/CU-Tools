@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "kind": "issue",
+  "id": "02-Invoice-Extraction",
+  "slug": "invoice-extraction",
+  "title": "Public invoice extraction baseline",
+  "customer": "Public example; no customer data",
+  "owner": "Not provided",
+  "opened": "2026-09-16",
+  "status": "open",
+  "summary": "Plan an evidence-based baseline using the existing public invoice and schema without changing legacy tutorial artifacts.",
+  "problem": {
+    "expected": "Invoice fields should match reviewed source values before any automatic acceptance.",
+    "actual": "No numbered-iteration analysis or reviewed correctness evaluation has been run.",
+    "impact": "This example does not yet establish extraction correctness, cost, or straight-through-processing readiness."
+  },
+  "goals": [
+    "Establish a reproducible invoice baseline before proposing schema changes.",
+    "Record quality evidence and cost for each future experiment."
+  ],
+  "success_criteria": [
+    "Freeze the exact schema, selected input list, reviewed truth, evaluator, and acceptance rules before execution.",
+    "Report correctness with denominators and raw evidence sources, including failures and retries.",
+    "Keep STP claims unverified until representative held-out case-level acceptance and review outcomes are measured."
+  ],
+  "defects": [],
+  "bugs": [],
+  "links": [
+    {
+      "label": "Invoice tutorial and iteration navigation",
+      "path": "README.md",
+      "role": "overview"
+    },
+    {
+      "label": "Planned baseline report",
+      "path": "iterations/001/report.md",
+      "role": "report"
+    }
+  ],
+  "iterations": [
+    {
+      "id": "001",
+      "path": "iterations/001/manifest.json",
+      "summary": "The existing invoice schema can extract the selected public invoice's critical fields correctly against reviewed source values.",
+      "result": "Not run; existing public inputs are linked, but no execution, reviewed evaluation, or cost measurement exists for this iteration.",
+      "status": "planned"
+    }
+  ]
+}

@@ -96,7 +96,8 @@ Use semantic versioning for schemas:
 2. Use `invoice_v3_improved.json` as a reference template
 3. Follow all 8 best practices listed above
 4. Validate using `python tools/cu-analyzer-validate/cu_analyzer_validator.py schemas/your_schema.json`
-5. Test using `python tools/cu-analyzer-run/create_and_test.py`
+5. Create a new analyzer version with `cu analyzer create --name ID --schema FILE`,
+   then test explicitly with `cu analyze`; see the root README for capture and cost approval.
 6. Iterate based on results
 
 ## Related Resources

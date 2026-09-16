@@ -1,0 +1,153 @@
+{
+  "annotation_version": "golden-v1",
+  "reviewed_at": "2026-08-05",
+  "document_count": 10,
+  "per_document_obligation_counts": {
+    "galacticommtechnologiesinc-11-07-1997-ex-10-46-w-288e261b": 6,
+    "watchitmediainc-20061201-8-k-ex-10-1-4148672-ex--ba668c47": 9,
+    "pacificsystemscontroltechnologyinc-08-24-2000-ex-4c46375e": 6,
+    "primeenergyresourcescorp-04-02-2007-ex-10-28-com-762f17ca": 4,
+    "versotechnologiesinc-12-28-2007-ex-99-3-intellec-9630dd45": 2,
+    "rgcresourcesinc-20151216-8-k-ex-10-3-9372751-ex--f744ccc2": 7,
+    "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8": 15,
+    "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016": 16,
+    "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d": 11,
+    "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a": 21
+  },
+  "total_obligations": 97,
+  "counts_by_type": {
+    "Audit/Access": 0,
+    "Compliance": 8,
+    "Confidentiality/Data Protection": 6,
+    "Delivery": 11,
+    "Indemnification/Defense": 5,
+    "Insurance": 0,
+    "Intellectual Property/License": 5,
+    "Notice": 12,
+    "Other": 2,
+    "Payment": 21,
+    "Reporting/Records": 2,
+    "Restrictive Covenant": 8,
+    "Service/Performance": 17,
+    "Termination/Post-Termination": 0,
+    "Warranty/Remedy": 0
+  },
+  "counts_by_nature": {
+    "Affirmative": 33,
+    "Conditional": 46,
+    "Prohibition": 10,
+    "Survival": 8
+  },
+  "changes_from_drafts": {
+    "batch-1.json": {
+      "documents": [
+        "galacticommtechnologiesinc-11-07-1997-ex-10-46-w-288e261b",
+        "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a"
+      ],
+      "added": 0,
+      "removed": 19,
+      "materially_corrected": 6,
+      "notes": "Removed passive forum/fee, formalities, legal-status, and factual-representation over-annotations; merged related action phrases, corrected survival-payment detail, and repaired Galacticomm O003’s stale draft-ID references."
+    },
+    "batch-2.json": {
+      "documents": [
+        "watchitmediainc-20061201-8-k-ex-10-1-4148672-ex--ba668c47",
+        "versotechnologiesinc-12-28-2007-ex-99-3-intellec-9630dd45"
+      ],
+      "added": 0,
+      "removed": 0,
+      "materially_corrected": 1,
+      "notes": "Recast channel-only use as a prohibition; retained the two distinct further-assurance/cost duties."
+    },
+    "batch-3.json": {
+      "documents": [
+        "pacificsystemscontroltechnologyinc-08-24-2000-ex-4c46375e",
+        "primeenergyresourcescorp-04-02-2007-ex-10-28-com-762f17ca"
+      ],
+      "added": 0,
+      "removed": 0,
+      "materially_corrected": 0,
+      "notes": "Confirmed scope and obligors; standardized IDs and field types without changing substantive obligation count."
+    },
+    "batch-4.json": {
+      "documents": [
+        "rgcresourcesinc-20151216-8-k-ex-10-3-9372751-ex--f744ccc2",
+        "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8"
+      ],
+      "added": 0,
+      "removed": 3,
+      "materially_corrected": 2,
+      "notes": "Removed passive marketplace-pricing obligations, narrowed mandatory notice evidence, and preserved distinct action atomization."
+    },
+    "batch-5.json": {
+      "documents": [
+        "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+        "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d"
+      ],
+      "added": 1,
+      "removed": 17,
+      "materially_corrected": 5,
+      "notes": "Merged product specifications, split indemnify/hold harmless, and removed passive formalities/forum and amendment-instrument over-annotation."
+    }
+  },
+  "validation_checks": {
+    "document_count_unique_manifest_order": {
+      "status": "passed",
+      "detail": "Exactly 10 unique documents in selection-manifest order."
+    },
+    "source_sha256": {
+      "status": "passed",
+      "detail": "All SHA-256 values recomputed from source bytes and matched."
+    },
+    "quote_and_span_integrity": {
+      "status": "passed",
+      "detail": "Every source_text[start:end] equals span.text and every exact quote has a matching span."
+    },
+    "reference_integrity": {
+      "status": "passed",
+      "detail": "All party and related-obligation references resolve."
+    },
+    "id_integrity": {
+      "status": "passed",
+      "detail": "Obligation IDs are unique and sequential O001... within every contract."
+    },
+    "schema_enums_and_types": {
+      "status": "passed",
+      "detail": "Required keys, enumerations, booleans, strings, and arrays have exact types."
+    },
+    "required_content": {
+      "status": "passed",
+      "detail": "No obligation has an empty action, obligor, exact_quotes, or source_spans."
+    },
+    "duplicate_review": {
+      "status": "passed",
+      "detail": "Automated same-obligor/action/evidence duplicate check and manual semantic duplicate pass found none."
+    }
+  },
+  "known_ambiguities": [
+    "Galacticomm: passive no-additional-fees and Florida-forum sentences were excluded because they do not clearly identify the performing party.",
+    "Pacific: passive media-approval and display-delivery clauses were attributed to the Sponsor from surrounding party-specific context.",
+    "PrimeEnergy: severe OCR corruption and conflicting $25,000,000/$21,000,000 liquidity text are preserved in quotations.",
+    "XLI: the purchase-order/payment condition in the third-party Product-access prohibition is grammatically ambiguous and preserved without repair; passive pricing text was excluded.",
+    "Gridiron: TCH, my facsimile, and other source wording are preserved; product specifications were treated as descriptors of one sale duty.",
+    "PreCheck: the discount remains the source placeholder ¨%; future-facing licensing and professional-service language in the Distributor description was treated as operative, while present factual representations were excluded."
+  ],
+  "benchmark_caveat": "This is model-assisted expert-style annotation and requires qualified legal-human review before use as an external benchmark.",
+  "correction_history": [
+    {
+      "corrected_at": "2026-08-05",
+      "pass": "focused-semantic-integrity-correction",
+      "corrections": [
+        {
+          "doc_id": "galacticommtechnologiesinc-11-07-1997-ex-10-46-w-288e261b",
+          "obligation_id": "O003",
+          "field": "amount_or_quantity",
+          "before": "The access-fee amount calculated under O-002 and O-003.",
+          "after": "The access-fee amount calculated under O001 and O002.",
+          "reason": "O-002/O-003 were stale draft IDs and O-003 incorrectly self-referenced the remittance duty; final fee obligations are O001 and O002."
+        }
+      ],
+      "scan_result": "Reviewed all free-text fields across 97 obligations for stale/non-final IDs, textual self-references, party/action/detail mismatches, and quote/span-array inconsistencies; no other confirmed issue required a change."
+    }
+  ]
+}

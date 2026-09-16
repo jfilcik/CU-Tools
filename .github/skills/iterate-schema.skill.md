@@ -1,239 +1,85 @@
 ---
-status: ✅ IMPLEMENTED
-version: 1.0.0
-last_updated: 2026-06-19
+name: iterate-schema
+description: Diagnoses saved CU results and proposes targeted field-description improvements. Use after evaluation reveals missing, ambiguous, or inconsistent fields; follows the canonical analyzer iteration workflow.
 ---
 
-# Skill: Iterate Schema
+# Skill: Iterate Schema — Field Diagnostics
 
-Improve a Content Understanding analyzer schema based on test results and field diagnostics.
+Use [Iterate Analyzer Schema](iterate-analyzer-schema.skill.md) for experiment
+planning, execution, promotion, bugs, and cost. This skill is its focused
+offline diagnostic entry point, not another execution workflow.
 
-## Purpose
+## 1. Diagnose existing evidence
 
-Schema iteration is the most common workflow after creating a v1 analyzer. This skill guides you through:
-- Reviewing test results to identify underperforming fields
-- Running diagnostics to surface low-confidence and low-fill-rate fields
-- Making targeted field description improvements
-- Re-testing and comparing versions to verify improvements
+Select a new numbered experiment under
+[the workspace contract](../../docs/iteration-workspaces.md). Read the
+preserved baseline; put new derivatives in the candidate, not the baseline:
 
-## When to Use
-
-- After running an eval (see `eval-cu.skill.md`) and getting results below target
-- When fill rate is < 80% for critical fields
-- When confidence is < 0.85 for critical fields
-- When iterating from v1 → v2 → v3 of a schema
-
-## Prerequisites
-
-- An existing analyzer schema (v1 or later)
-- Test results from a previous run (JSON output directory)
-- Sample documents for re-testing
-
-## See Also
-
-- `eval-cu.skill.md` — Run evals to generate the results this skill analyzes
-- `generate-analyzer.skill.md` — Create the initial schema (v1)
-- `generate-analyzer-classify-route.skill.md` — For classify-and-route pipelines
-- Prompts: `generate-analyzer-schema.prompt.md`, `write_schema_fields.prompt.md`
-
----
-
-## Workflow Steps
-
-### Step 1: Run Diagnostics on Current Results
-
-Export results and run field-level diagnostics:
-
-```bash
-python tools/cu-results-export/export.py \
-  --input <test_results_dir> \
-  --output <test_results_dir>/results.csv \
-  --diagnose
+```powershell
+python tools\cu-results-export\export.py `
+  --input "{baseline_folder}\outputs\raw" `
+  --output "{iteration_folder}\outputs\evaluation\baseline.csv" --diagnose
 ```
 
-This produces:
-- `results.csv` — All extracted values in tabular form
-- `results.diagnosis.json` — Per-field metrics (fill rate, confidence, suggestions)
-- Stdout diagnostic table with severity flags
+The exporter supports native recursive `.result.json` and legacy saved
+results, excluding CLI status reports. Inspect its actual generated
+diagnostics; absent confidence is unknown, not low confidence. Fill/confidence
+can prioritize review but cannot establish a defect, correctness, or STP.
 
-**What to look for:**
-- 🔴 **Critical**: Fill rate < 50% or confidence < 0.5 — field needs major revision
-- 🟡 **Warning**: Fill rate < 80% or confidence < 0.7 — field needs improvement
-- 🔵 **Info**: High variance or outliers — field may need disambiguation
-- 🟢 **OK**: Field is performing well
+## 2. Investigate expected versus actual
 
-### Step 2: Review Problem Fields
+| Observation | Hypothesis to test |
+|---|---|
+| Missing field | Source is absent, label varies, or extraction missed it |
+| Wrong populated field | Confusable labels, wrong party/section, or row leakage |
+| Changing value/count across trials | Ambiguity, repeated-entity loss, or normalization |
+| Missing value with reported confidence | Source/reading-order/schema interaction; not a proven cause |
+| Summary totals missing within arrays | Document totals may have been modeled as row properties |
 
-For each flagged field, identify the root cause:
+For each issue, cite raw source and reviewed expectation, track the local
+defect, and label cause unknown/suspected until isolated. Do not explain model
+internals from confidence scores.
 
-| Symptom | Likely Cause | Fix |
-|---------|-------------|-----|
-| Low fill rate, OK confidence | Field missing in some doc variations | Add alternative labels, broaden description |
-| OK fill rate, low confidence | Ambiguous description | Add location hints, format examples, disambiguation |
-| Low fill rate AND low confidence | Description doesn't match document content | Review layout output, rewrite description from scratch |
-| High variance | Inconsistent across doc types | Add more specific location context |
-| Value mismatch (wrong extractions) | Confusing with another field | Add "not to be confused with..." disambiguation |
-| **No `valueString` returned, but `confidence ≥ 0.7`** | **Reading-order broken: LLM knows the field exists but can't resolve which token is the value** | **See "Diagnosing Missing Values with High Confidence" below** |
-| Field works with `enableLayout: false` but fails with `enableLayout: true` | Layout model failed to detect a table; values and labels are positionally separated in OCR reading order | Flatten nested arrays, anchor by "directly below the label" in description, match exact document labels |
-| Only some summary/footer fields fail (e.g., totals row) | Summary footer rendered as free text, not `<table>` | Same as above — see "Diagnosing Missing Values with High Confidence" |
+## 3. Inspect text and structure
 
-### Step 3: Review Layout Output
+Reuse saved layout where possible. If a new billable layout call is approved:
 
-If a field has very low fill rate, verify the content exists in the document:
-
-```bash
-python tools/cu-analyzer-run/run.py \
-  --layout \
-  --input <sample_document> \
-  --output <output_dir>
+```powershell
+cu analyze "{document_path}" --analyzer prebuilt-layout --json `
+  --api-version 2025-11-01 `
+  --output-dir "{iteration_folder}\outputs\raw\layout" `
+  --report-file "{iteration_folder}\outputs\raw\layout-status.json" `
+  --yes --on-existing error
 ```
 
-Check the `.layout.md` output to confirm:
-- The target text exists in the OCR output
-- The text labels match what your description references
-- The document structure (tables, sections) is correctly identified
+Inspect native results for the exact labels, value text, tables, and reading
+order. Missing table structure or separated labels/values supports a
+reading-order hypothesis, not a confirmed root cause. Check original content
+and controlled comparisons before attributing the defect.
 
-### Step 4: Improve Field Descriptions
+## 4. Make one coherent schema change
 
-Apply the two-stage pipeline rules (see `Agents.md` §4.5):
+- Bind to semantic labels and their real variants, with section/row/column
+  boundaries; a label-relative location can clarify sparse summaries.
+- Separate document totals from line-item arrays; preserve every required row.
+- Disambiguate party, date, or amount meanings; do not substitute a different
+  field just to raise fill rate.
+- Keep examples generic and format-representative, not copied truth answers.
+- Specify justified normalization and missing-source behavior.
+- Validate any configuration change against the selected API, then test it
+  as a new hypothesis. Do not infer an undocumented processing mechanism.
 
-**DO reference:**
-- Text content and labels: `"near 'Total:' label"`
-- Document structure: `"in the header section"`, `"in the line items table"`
-- Alternative labels: `"May be labeled as 'Amount', 'Total Due', or 'Balance'"`
-- Format examples: `"Format: MM/DD/YYYY. Examples: '01/15/2024', '2024-01-15'"`
+See [field descriptions](../prompts/write_schema_fields.prompt.md) and
+[Agents.md](../../Agents.md) for schema rules.
 
-**DON'T reference:**
-- Visual appearance: colors, fonts, bold, size
-- Position without text context: "top left corner"
+## 5. Verify and decide
 
-**Create a new schema version** (don't overwrite the previous one):
+Validate offline, create a new versioned analyzer with official `cu`, then use
+the [iteration workflow](iterate-analyzer-schema.skill.md) for approved native
+batches or five/ten parallel repeats. Compare reviewed correctness and
+protected behavior on the full frozen corpus, not confidence deltas alone.
 
-```
-schemas/
-├── my_analyzer_v1.json   ← keep for comparison
-├── my_analyzer_v2.json   ← improved version
-```
-
-### Step 5: Re-Test with Comparison
-
-Run the improved schema and compare against the previous version:
-
-```bash
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/my_analyzer_v2.json \
-  --input <sample_documents> \
-  --output <test_results>/v2 \
-  --compare-with <test_results>/v1
-```
-
-This generates:
-- New test results in `v2/`
-- `comparison.md` — Field-by-field comparison with confidence deltas
-- Indicators: ✅ improved, ⚠️ degraded, 🔄 value changed
-
-### Step 6: Evaluate Improvement
-
-Review the comparison report:
-
-1. **Improved fields** (✅): Confirm the fix worked as expected
-2. **Degraded fields** (⚠️): Check if the change inadvertently affected other fields
-3. **Unchanged fields**: Verify they weren't affected by changes
-
-**Decision criteria:**
-- If critical fields improved and nothing degraded → **accept v2**
-- If some fields improved but others degraded → **investigate regressions, create v3**
-- If no improvement → **go back to Step 3, review layout more carefully**
-
-### Step 7: Run Full Eval (Optional)
-
-Once satisfied with field-level improvements, run a full eval:
-
-```bash
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/my_analyzer_v2.json \
-  --input <full_corpus> \
-  --output <test_results>/v2_full \
-  --compare-with <test_results>/v1_full
-```
-
-Then export and diagnose the full results to confirm improvements hold at scale.
-
----
-
-## Common Patterns
-
-### Pattern: Iterating on a Single Problem Field
-
-1. Run `--diagnose` to identify the worst field
-2. Check layout output for that document
-3. Rewrite just that field's description
-4. Run `create_and_test.py` with `--compare-with` to verify
-5. Repeat until field meets targets
-
-### Pattern: Improving Fill Rate Across Documents
-
-1. Run scale eval (1×N) with diverse documents
-2. Export with `--diagnose`
-3. Group documents by which fields are missing
-4. For each group, check if the field label varies
-5. Add alternative labels to cover all variations
-6. Re-test on the full corpus
-
-### Pattern: Reducing Confidence Variance
-
-1. Run stability eval (N×1) on a representative document
-2. Export with `--diagnose`
-3. For high-variance fields, add more specific anchoring:
-   - Section headings: "in the 'Payment Details' section"
-   - Proximity to other fields: "below the invoice number"
-   - Format constraints: "exactly 10 digits"
-4. Re-test stability to verify variance decreased
-
-### Pattern: Diagnosing Missing Values with High Confidence (Reading-Order Issues)
-
-**Signature**: Some fields extract reliably; others consistently return no `valueString` despite `confidence ≥ 0.7`. Re-running 10× yields the same misses — this is NOT stochastic LLM variance.
-
-**Likely cause**: The layout model failed to detect a region (commonly summary footers, multi-row headers, or sparse grids) as a `<table>`. Labels and values are emitted as free text, and OCR reading order separates them by many tokens. The LLM sees the label, knows a value should exist (hence the confidence), but cannot resolve which token is the value.
-
-**Real-world example (APL Logistics packing list)**:
-- `enableLayout: true` (default): `GrossWeight`, `CartonsQty`, `PiecesQty` consistently missing across 10 runs
-- `enableLayout: false`: Same fields extract correctly every time (prebuilt-document key-value pair detection uses spatial proximity)
-- Document Intelligence markdown output identical in both environments → not a service-side issue
-- Initial diagnosis: "DEV vs PROD discrepancy" — actually a schema/layout interaction
-
-**Diagnostic steps**:
-
-1. **Inspect the layout output for the failing region**:
-   ```bash
-   python tools/cu-analyzer-run/run.py --layout --input <doc.pdf> --output diag_layout/
-   ```
-   Open `diag_layout/<doc>.layout.md`. If the failing fields' labels and values appear as plain text (no `<table>` wrapping) and labels are visually above values, reading order is likely broken.
-
-2. **Compare with `--read` (no layout)**:
-   ```bash
-   python tools/cu-analyzer-run/run.py --read --input <doc.pdf> --output diag_read/
-   ```
-   Note the token order. If labels appear far before values in the read stream, the same will be true in the layout token stream that the LLM consumes.
-
-3. **Verify with a flattened test schema**: Create a minimal flat schema (no nested arrays) targeting only the failing fields with explicit "directly below the label" descriptions. If the flat schema works, the original nested schema's complexity was a contributing factor.
-
-**Mitigations** (in order of preference):
-
-1. **Flatten** — move summary/total fields out of nested `Goods[]` / `LineItems[]` arrays to top-level. Document-level totals don't belong in line-item arrays.
-2. **Anchor by position relative to the label** — `"The numeric value appearing directly below the 'Gross Kgs' label"`.
-3. **Match exact document labels** — if the document says "# of Cartons", don't write `"labeled 'Total Cartons'"`. Read the actual label from `.layout.md`.
-4. **Fix examples** — examples that look nothing like real values bias the LLM. If the real value is `180.82`, don't use `"2459044"` as an example.
-5. **Workaround**: `enableLayout: false` in analyzer config. Trades layout-table awareness for `prebuilt-document` key-value detection. Use when document-level rewrite isn't feasible.
-
-**Reference**: `Agents.md` §4.5 (two-stage pipeline) and `generate-analyzer-schema.prompt.md` §7 (reading-order pitfalls).
-
----
-
-## Tips
-
-- **Always create a new schema version** — never overwrite. Version history is essential for debugging.
-- **Fix one field at a time** when debugging — changing many fields simultaneously makes it hard to attribute improvements.
-- **Use `--compare-with` religiously** — it's the fastest way to verify improvements.
-- **Target confidence ≥ 0.85** for production fields. Below 0.7 needs attention.
-- **Fill rate targets depend on the document corpus** — 100% isn't always achievable if fields are optional.
+Use a versioned offline evaluator; there is no implicit service-side comparison.
+Record missing/failed outputs, denominators, coverage, false accepts, review,
+holdout limits, and unknown usage/cost honestly. Finish manifest/report and
+root navigation; link actual product bugs separately from local defects.
