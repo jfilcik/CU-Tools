@@ -199,7 +199,7 @@ def main() -> None:
     )
     print(
         f"Prepared {len(output['documents'])} contracts; "
-        f"{len(output['atomic_annotation_doc_ids'])} require atomic annotation."
+        f"{len(output['atomic_annotation_doc_ids'])} selected for optional atomic annotation."
     )
 
 

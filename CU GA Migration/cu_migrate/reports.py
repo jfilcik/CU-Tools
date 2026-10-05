@@ -14,6 +14,7 @@ from pathlib import Path
 from cu_migrate.models import (
     FindingSeverity,
     MigrationResult,
+    MigrationFinding,
     MigrationRun,
     ValidationStatus,
 )
@@ -61,7 +62,7 @@ def _identify_common_findings(run: MigrationRun) -> list[dict]:
 
     # Count how many analyzers each unique finding appears in
     finding_counts: Counter[str] = Counter()
-    finding_examples: dict[str, MigrationResult] = {}
+    finding_examples: dict[str, MigrationFinding] = {}
 
     for result in run.results:
         seen_keys: set[str] = set()
@@ -107,6 +108,9 @@ def generate_report(run: MigrationRun) -> str:
     lines.extend([
         "# CU Migration Report",
         "",
+        "**OFFLINE PROPOSALS ONLY. No analyzer was deployed or service-validated.**",
+        "Scope 'all' means all supplied custom analyzers, not all analyzers in a resource.",
+        "",
         f"**Run ID:** {run.run_id}  ",
         f"**Mode:** {run.mode.value}  ",
         f"**Scope:** {run.scope}  ",
@@ -117,8 +121,8 @@ def generate_report(run: MigrationRun) -> str:
         "| Metric | Count |",
         "|--------|-------|",
         f"| Analyzers scanned | {len(run.results)} |",
-        f"| ✅ Passed | {run.success_count} |",
-        f"| ⚠️ Warnings | {run.warning_count} |",
+        f"| ✅ Passed offline checks | {run.success_count} |",
+        f"| ⚠️ Requires review | {run.warning_count} |",
         f"| ❌ Failed | {run.failure_count} |",
         "",
     ])
@@ -134,7 +138,7 @@ def generate_report(run: MigrationRun) -> str:
             "## Common Issues (applies to all or most analyzers)",
             "",
             "The following issues were detected across the majority of analyzers "
-            "and do not need to be reviewed individually.",
+            "and still require review for each affected analyzer before creation.",
             "",
             "| Severity | Category | Message | Action | Analyzers |",
             "|----------|----------|---------|--------|-----------|",
@@ -214,6 +218,20 @@ def generate_report(run: MigrationRun) -> str:
                 )
             lines.append("")
 
+    lines.extend(["## Source Evidence", ""])
+    for result in run.results:
+        lines.extend([
+            f"- **{result.source.analyzer_id}**",
+            f"  - Export: `{result.source.source_path or 'in-memory definition'}`",
+            f"  - SHA-256: `{result.source.source_sha256 or 'not available'}`",
+        ])
+    lines.extend([
+        "",
+        "Model deployment availability, storage access, target-ID availability and runtime equivalence "
+        "are not checked offline. Inspect them separately with the official cu CLI.",
+        "Blocked proposals are diagnostic artifacts only; do not create them.",
+        "",
+    ])
     return "\n".join(lines)
 
 
@@ -226,7 +244,7 @@ def generate_app_checklist(run: MigrationRun) -> str:
     lines = [
         "# App Integration Checklist",
         "",
-        "Use this checklist after GA analyzers are created.",
+        "Nothing has been deployed. First review the plan and explicitly create replacements with the official cu CLI.",
         "",
     ]
     for result in run.results:
@@ -234,10 +252,14 @@ def generate_app_checklist(run: MigrationRun) -> str:
             continue
         lines.append(f"## {result.source.analyzer_id} → {result.proposed.analyzer_id}")
         lines.append("")
+        lines.append("- [ ] Resolve blockers and review every warning before creating this proposal")
+        lines.append("- [ ] Confirm the new versioned ID is unused with the official cu CLI")
+        lines.append("- [ ] Validate the local schema and explicitly create the replacement with the official cu CLI")
+        lines.append("- [ ] Test representative documents before updating application references")
         lines.append(f"- [ ] Update analyzer ID in app config to `{result.proposed.analyzer_id}`")
         lines.append("- [ ] Update API version to GA (`2025-11-01`)")
         lines.append("- [ ] Replace `analyze` inline content calls with `analyzeBinary`")
-        lines.append(f"- [ ] Verify model deployments: `{', '.join(result.proposed.models.keys())}`")
+        lines.append("- [ ] Inspect model choices and resource-wide deployment mappings using the official cu CLI")
 
         not_supported = [f for f in result.findings if f.severity == FindingSeverity.NOT_SUPPORTED]
         if not_supported:
@@ -260,17 +282,55 @@ def generate_app_checklist(run: MigrationRun) -> str:
 # Write all reports
 # ---------------------------------------------------------------------------
 
+def create_command(analyzer_id: str) -> str:
+    """PowerShell command text for a validated ID; never execute it."""
+    return (
+        f"cu analyzer create --name {analyzer_id} "
+        f"--schema '.\\proposed\\{analyzer_id}.json' --api-version 2025-11-01"
+    )
+
+
+def generate_commands(run: MigrationRun) -> str:
+    """Human-operated CLI handoff, excluding blocked proposals."""
+    lines = [
+        "# Official CU CLI handoff",
+        "",
+        "**No commands were executed. No analyzers were deployed.**",
+        "",
+        "Open PowerShell in this bundle's directory. Configure authentication separately in the official CLI.",
+        "Inspect the intended resource, model defaults and new-ID availability. Review all warnings and validate "
+        "each schema with the installed official CLI before running any create command.",
+        "The commands always create new versioned IDs; never delete/recreate a source analyzer as an update.",
+        "",
+    ]
+    for result in run.results:
+        lines.extend([f"## {result.source.analyzer_id}", ""])
+        if result.validation_status == ValidationStatus.FAIL or not result.proposed:
+            lines.extend(["**Blocked: no create command.** Correct the source and export a new plan.", ""])
+        else:
+            lines.extend([
+                "Review required; creation is a separate explicit service operation.",
+                "",
+                "```powershell",
+                create_command(result.proposed.analyzer_id),
+                "```",
+                "",
+            ])
+    return "\n".join(lines)
+
+
 def write_reports(run: MigrationRun, output_dir: Path) -> list[Path]:
     """Write all report files to the output directory. Returns paths written."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    written: list[Path] = []
-
-    report_path = output_dir / "migration_report.md"
-    report_path.write_text(generate_report(run), encoding="utf-8")
-    written.append(report_path)
-
-    checklist_path = output_dir / "app_checklist.md"
-    checklist_path.write_text(generate_app_checklist(run), encoding="utf-8")
-    written.append(checklist_path)
-
-    return written
+    reports = {
+        "migration_report.md": generate_report(run),
+        "app_checklist.md": generate_app_checklist(run),
+        "official_cu_commands.md": generate_commands(run),
+    }
+    for name in reports:
+        if (output_dir / name).exists():
+            raise FileExistsError(f"Refusing to overwrite existing report: {output_dir / name}")
+    for name, content in reports.items():
+        with (output_dir / name).open("x", encoding="utf-8") as handle:
+            handle.write(content)
+    return [output_dir / name for name in reports]

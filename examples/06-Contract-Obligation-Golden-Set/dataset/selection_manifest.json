@@ -1,0 +1,86 @@
+{
+  "dataset": "Contract Understanding Atticus Dataset (CUAD) v1",
+  "source_repository": "https://github.com/TheAtticusProject/cuad",
+  "source_revision": "67faa0e6023b04fcaae6cc09497ab00e5d63a2a2",
+  "source_archive_sha256": "f8161d18bea4e9c05e78fa6dda61c19c846fb8087ea969c172753bc2f45b999a",
+  "source_file_sha256": "ed0b77d85bdf4014d7495800e8e4a70565b48ee6f8a2e5dca9cf8655dbf10eae",
+  "selection_version": "curated-short-obligations-v1",
+  "selection_criteria": {
+    "maximum_words": 1000,
+    "minimum_obligation_markers": 4,
+    "requirements": [
+      "Complete or substantially operative agreement text",
+      "At least two identifiable contracting parties",
+      "Multiple express duties, prohibitions, or conditional duties",
+      "Diverse agreement types across the ten-document set"
+    ],
+    "excluded": [
+      "Joint-filing and administrative agreements",
+      "Press releases",
+      "Signature-only schedules",
+      "Amendments that do not contain the amended operative duties"
+    ]
+  },
+  "documents": [
+    {
+      "doc_id": "galacticommtechnologiesinc-11-07-1997-ex-10-46-w-288e261b",
+      "original_document_id": "GALACTICOMMTECHNOLOGIESINC_11_07_1997-EX-10.46-WEB HOSTING AGREEMENT",
+      "agreement_type": "Web Hosting Agreement",
+      "expected_words": 223
+    },
+    {
+      "doc_id": "watchitmediainc-20061201-8-k-ex-10-1-4148672-ex--ba668c47",
+      "original_document_id": "WatchitMediaInc_20061201_8-K_EX-10.1_4148672_EX-10.1_Content License Agreement",
+      "agreement_type": "Content License Agreement",
+      "expected_words": 342
+    },
+    {
+      "doc_id": "pacificsystemscontroltechnologyinc-08-24-2000-ex-4c46375e",
+      "original_document_id": "PACIFICSYSTEMSCONTROLTECHNOLOGYINC_08_24_2000-EX-10.53-SPONSORSHIP AGREEMENT",
+      "agreement_type": "Sponsorship Agreement",
+      "expected_words": 682
+    },
+    {
+      "doc_id": "primeenergyresourcescorp-04-02-2007-ex-10-28-com-762f17ca",
+      "original_document_id": "PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT",
+      "agreement_type": "Completion and Liquidity Maintenance Agreement",
+      "expected_words": 742
+    },
+    {
+      "doc_id": "versotechnologiesinc-12-28-2007-ex-99-3-intellec-9630dd45",
+      "original_document_id": "VERSOTECHNOLOGIESINC_12_28_2007-EX-99.3-INTELLECTUAL PROPERTY AGREEMENT",
+      "agreement_type": "Intellectual Property Agreement",
+      "expected_words": 739
+    },
+    {
+      "doc_id": "rgcresourcesinc-20151216-8-k-ex-10-3-9372751-ex--f744ccc2",
+      "original_document_id": "RgcResourcesInc_20151216_8-K_EX-10.3_9372751_EX-10.3_Franchise Agreement",
+      "agreement_type": "Franchise Agreement",
+      "expected_words": 805
+    },
+    {
+      "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+      "original_document_id": "XLITECHNOLOGIES,INC_12_02_2015-EX-10.02-STRATEGIC ALLIANCE AGREEMENT",
+      "agreement_type": "Strategic Alliance Agreement",
+      "expected_words": 875
+    },
+    {
+      "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+      "original_document_id": "GRIDIRONBIONUTRIENTS,INC_02_05_2020-EX-10.3-SUPPLY AGREEMENT",
+      "agreement_type": "Supply Agreement",
+      "expected_words": 903
+    },
+    {
+      "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+      "original_document_id": "TRANSMONTAIGNEPARTNERSLLC_03_13_2020-EX-10.9-SERVICES AGREEMENT",
+      "agreement_type": "Services Agreement",
+      "expected_words": 880
+    },
+    {
+      "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+      "original_document_id": "PrecheckHealthServicesInc_20200320_8-K_EX-99.2_12070169_EX-99.2_Distributor Agreement",
+      "agreement_type": "Distributor Agreement",
+      "expected_words": 970
+    }
+  ]
+}

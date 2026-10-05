@@ -1,0 +1,1595 @@
+{
+  "review_metadata": {
+    "review_date": "2026-08-05",
+    "scope": "Paired source-level qualitative review of Standard and Agentic obligation extraction",
+    "documents": 10,
+    "gold_obligations": 97,
+    "reviewed_items": {
+      "standard_predictions": 55,
+      "agentic_predictions": 129,
+      "agentic_deterministic_matches": 72,
+      "agentic_deterministic_misses": 25,
+      "agentic_unmatched_predictions": 57
+    },
+    "inputs": {
+      "gold": "C:\\src\\CU-Tools\\examples\\06-Contract-Obligation-Golden-Set\\ground_truth\\golden_obligations.jsonl",
+      "sources": "C:\\src\\CU-Tools\\examples\\06-Contract-Obligation-Golden-Set\\samples\\downloaded\\*.txt",
+      "standard_results": "C:\\src\\CU-Tools\\examples\\06-Contract-Obligation-Golden-Set\\test_results\\standard",
+      "agentic_results": "C:\\src\\CU-Tools\\examples\\06-Contract-Obligation-Golden-Set\\test_results\\agentic",
+      "standard_metrics": "C:\\src\\CU-Tools\\examples\\06-Contract-Obligation-Golden-Set\\evaluation\\output\\standard_metrics.json",
+      "agentic_metrics": "C:\\src\\CU-Tools\\examples\\06-Contract-Obligation-Golden-Set\\evaluation\\output\\agentic_metrics.json",
+      "standard_scratch_review": "C:\\Users\\jfilcik\\.copilot\\session-state\\407934fd-93a4-44ad-818e-119df0516cea\\files\\standard-qualitative-review.json",
+      "evaluator": "C:\\src\\CU-Tools\\examples\\06-Contract-Obligation-Golden-Set\\evaluation\\evaluate.py"
+    },
+    "runs": {
+      "standard": {
+        "run_id": "run_20260805_175210_contract",
+        "api_version": "2025-11-01",
+        "model": "gpt-4.1"
+      },
+      "agentic": {
+        "run_id": "run_20260805_175428_contract",
+        "api_version": "2026-06-01-preview",
+        "model": "gpt-5.2",
+        "workflow": "Agentic"
+      }
+    },
+    "method": "Reviewed all Agentic selected matches, all 25 deterministic misses, and all 57 unmatched predictions against source text and the reviewed gold. No gold records were changed. Post-termination accuracy and coverage use the corrected fail-closed evaluator: missing boolean values are incorrect and uncovered, not false."
+  },
+  "verdict": {
+    "headline": "Agentic materially improves recall and practical clause discovery, but it does not deliver a compelling balanced-quality or production-readiness win on this run.",
+    "demo_assessment": "Reasonable as a candid recall-oriented demo with side-by-side evidence and human review. Not reasonable if presented as broadly superior, inexpensive, fast, or production ready.",
+    "production_assessment": "Neither mode is a standalone production approach for a complete atomic obligation register. Standard is too incomplete; Agentic is too noisy, slow, token-heavy, and schema-incomplete: IsPostTermination is populated on only 5.6% of matched outputs.",
+    "does_standard_not_work": "No. Standard works as a fast, grounded, relatively precise triage extractor. It does not work for the stated exhaustive broad-obligation use case without review because atomic recall is 44.3% and 33 gold atoms have no Standard quote candidate.",
+    "does_agentic_materially_help": "Yes for recall: +29.9 points atomic recall and only 5 true content misses versus 33. No for the predeclared balanced-quality bar: F1 rises only 7.1 points, below the evaluator's 10-point material-advantage threshold, while precision falls 22.4 points."
+  },
+  "report_findings": [
+    "Standard is not a total failure: it is fast (19.7 s mean), 78.2% precise, and 100% quote-grounded, but 44.3% atomic recall makes it unsuitable for exhaustive obligation inventories.",
+    "Agentic raises atomic recall from 44.3% to 74.2% and reduces true source-content misses from 33 to 5, a material discovery improvement.",
+    "Balanced quality improves modestly: F1 moves from 56.6% to 63.7% (+7.1 points), below the evaluator's 10-point material-advantage threshold.",
+    "Of 25 Agentic false negatives, 20 are one-to-one/atomicity non-matches with 1.0 quote support in an already-matched prediction; only 5 are true unrepresented duties.",
+    "Of 57 Agentic unmatched predictions, 41 are genuine rights/options/grants/facts/legal effects, 8 are valid alternate atomization, 5 are duplicate fragments, 3 are quote/evaluator artifacts, and 0 are high-confidence gold omissions.",
+    "Deterministic 55.8% precision is conservative for source-supported usefulness but directionally fair for raw atomic output: reviewed useful yield is roughly 61-64%, or 67% if redundant fragments count.",
+    "Agentic quote groundedness is effectively strong: the reported 98.2% reflects three Prime quotes differing only by an extra trailing quotation mark, not invented substantive text.",
+    "Agentic has a material schema-completeness failure: IsPostTermination effective accuracy and coverage are both 5.6% (4/72 present and correct), versus Standard 95.3% accuracy and 100% coverage (43/43 present).",
+    "Agentic costs are large: 13.8x mean latency, 17.4x p95 latency, and 31.2x total tokens versus Standard.",
+    "The next evidence-producing step should test a stricter obligation ontology/atomic schema and improved matching, then separately test a Standard-first Agentic-fallback cascade; no improvement from those unrun changes is claimed."
+  ],
+  "standard_assessment": {
+    "metrics": {
+      "completion_rate": 1.0,
+      "gold_obligations": 97,
+      "predicted_obligations": 55,
+      "matched_obligations": 43,
+      "precision": 0.7818181818181819,
+      "recall": 0.44329896907216493,
+      "f1": 0.5657894736842105,
+      "type_accuracy": 0.813953488372093,
+      "nature_accuracy": 0.4883720930232558,
+      "obligor_accuracy": 0.8837209302325582,
+      "obligee_accuracy": 0.6511627906976745,
+      "post_termination_accuracy": 0.9534883720930233,
+      "required_detail_accuracy": 0.2857142857142857,
+      "quote_groundedness": 1.0,
+      "duplicate_count": 0,
+      "total_input_tokens": 42470,
+      "total_output_tokens": 14298,
+      "total_tokens": 56768,
+      "latency_seconds": {
+        "mean": 19.678930735588075,
+        "p50": 18.61479961872101,
+        "p95": 26.99587607383728,
+        "max": 26.99587607383728,
+        "total": 196.78930735588074
+      },
+      "post_termination_coverage": 1.0,
+      "summary_similarity": 0.5724241586950389,
+      "quote_alignment": 1.0
+    },
+    "qualitative_counts": {
+      "deterministic_false_negatives": 54,
+      "atomicity_false_nonmatches": 21,
+      "true_unrepresented_gold_atoms": 33,
+      "unmatched_predictions": 12,
+      "genuine_unsupported_predictions": 12,
+      "quote_supported_gold_atoms": 64,
+      "quote_supported_clause_coverage": 0.6597938144329897
+    },
+    "strengths": [
+      "All documents completed.",
+      "60/60 evidence quotes are exact normalized source substrings.",
+      "No exact or obvious semantic duplicate predictions.",
+      "Prominent unilateral duties are usually captured at low latency.",
+      "IsPostTermination is present on 43/43 matched outputs (100% coverage) and correct on 41/43 (95.3% effective accuracy)."
+    ],
+    "weaknesses": [
+      "Only 43/97 atomic matches.",
+      "Reciprocal/every-party and responsibility-framed duties are common true misses.",
+      "Nature accuracy is 48.8% and required-detail accuracy is 28.6%.",
+      "All 12 unmatched predictions cross the obligation boundary into rights, options, grants, or present legal acts."
+    ],
+    "fitness": "Useful triage and evidence candidate generation; not a complete broad-obligation register."
+  },
+  "agentic_assessment": {
+    "metrics": {
+      "completion_rate": 1.0,
+      "gold_obligations": 97,
+      "predicted_obligations": 129,
+      "matched_obligations": 72,
+      "precision": 0.5581395348837209,
+      "recall": 0.7422680412371134,
+      "f1": 0.6371681415929202,
+      "type_accuracy": 0.7916666666666666,
+      "nature_accuracy": 0.6805555555555556,
+      "obligor_accuracy": 0.8333333333333334,
+      "obligee_accuracy": 0.625,
+      "post_termination_accuracy": 0.05555555555555555,
+      "required_detail_accuracy": 0.33125,
+      "quote_groundedness": 0.9818181818181818,
+      "duplicate_count": 0,
+      "total_input_tokens": 1466452,
+      "total_output_tokens": 303768,
+      "total_tokens": 1770220,
+      "latency_seconds": {
+        "mean": 272.17227880954744,
+        "p50": 265.7123682498932,
+        "p95": 468.7596836090088,
+        "max": 468.7596836090088,
+        "total": 2721.7227880954742
+      },
+      "post_termination_coverage": 0.05555555555555555,
+      "summary_similarity": 0.602793523593029,
+      "quote_alignment": 1.0
+    },
+    "metric_deltas_vs_standard": {
+      "precision": -0.22367864693446093,
+      "recall": 0.2989690721649485,
+      "f1": 0.07137866790870973,
+      "type_accuracy": -0.022286821705426396,
+      "nature_accuracy": 0.1921834625322998,
+      "obligor_accuracy": -0.050387596899224785,
+      "obligee_accuracy": -0.026162790697674465,
+      "required_detail_accuracy": 0.04553571428571429,
+      "quote_groundedness": -0.018181818181818188,
+      "post_termination_accuracy": -0.8979328165374677,
+      "post_termination_coverage": -0.9444444444444444
+    },
+    "cost_ratios_vs_standard": {
+      "mean_latency": 13.830643669950089,
+      "p50_latency": 14.274253480690964,
+      "p95_latency": 17.364121924655798,
+      "total_tokens": 31.183413190529876,
+      "input_tokens": 34.52912644219449,
+      "output_tokens": 21.245488879563574
+    },
+    "false_negative_review": {
+      "deterministic_false_negatives": 25,
+      "atomicity_or_one_to_one_nonmatches": 20,
+      "true_unrepresented_gold_atoms": 5,
+      "true_misses_by_document": {
+        "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8": [
+          "O001"
+        ],
+        "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a": [
+          "O001",
+          "O002",
+          "O006",
+          "O007"
+        ]
+      },
+      "note": "PreCheck O006 lead forwarding and O007 noncompetition were captured by Standard but missed by Agentic, so Agentic is not a strict superset."
+    },
+    "practical_interpretation": {
+      "quote_supported_gold_atoms": 92,
+      "quote_supported_clause_coverage": 0.9484536082474226,
+      "deterministic_atomic_recall": 0.7422680412371134,
+      "strict_clear_or_alternate_valid_prediction_yield": 0.6124031007751938,
+      "useful_nonredundant_prediction_yield_including_evaluator_artifacts": 0.6356589147286822,
+      "source_supported_rate_including_redundant_fragments": 0.6744186046511628,
+      "warning": "These reviewed yields are diagnostic ranges, not replacement benchmark metrics. Clause support and atomic correctness use different units."
+    },
+    "evidence_review": {
+      "reported_grounded_quotes": "162/165",
+      "substantive_grounding_assessment": "All three failures are Prime evidence strings with one extra trailing quotation mark; stripping that mark makes each an exact source substring.",
+      "repeated_evidence_entries_within_predictions": 26,
+      "predictions_with_repeated_evidence": 17
+    },
+    "strengths": [
+      "Large recall and clause-coverage gain.",
+      "Much better expansion of reciprocal/party-specific duties in Watchit and PreCheck.",
+      "Nature accuracy improves by 19.2 points.",
+      "Finds responsibility-framed duties Standard misses in Xlite."
+    ],
+    "weaknesses": [
+      "IsPostTermination is omitted on 68/72 matched outputs; effective accuracy and field coverage are both 5.6%, despite all four populated values being correct.",
+      "41 unmatched predictions are genuine ontology leakage.",
+      "At least one selected match is semantically false: a permitted collateral-assignment exception is matched to TransMontaigne O007 prohibition.",
+      "Atomic splitting remains weak for 20 gold atoms.",
+      "Obligee accuracy is 62.5%; required-detail accuracy is only 33.1%.",
+      "Semantic fragmentation and repeated evidence are not reflected by duplicate_count=0."
+    ],
+    "fitness": "High-recall research/demo path with mandatory review; not production-ready as a raw obligation register.",
+    "unmatched_prediction_review": {
+      "counts": {
+        "genuine_unsupported_right_option_or_factual_over_extraction": 41,
+        "valid_obligation_omitted_by_gold": 0,
+        "valid_alternate_atomization_of_existing_gold": 8,
+        "duplicate_or_fragmentation": 5,
+        "quote_or_evaluator_artifact": 3
+      },
+      "items": [
+        {
+          "doc_id": "galacticommtechnologiesinc-11-07-1997-ex-10-46-w-288e261b",
+          "prediction_index": 0,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "The agreement states it voids and nullifies all previous agreements to this date between Galacticomm and Horst Entertainment Inc.",
+          "source_quotes": [
+            "This agreement shall void and nullify any and all previous agreements to this date between Galacticomm and Horst Entertainment Inc."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "galacticommtechnologiesinc-11-07-1997-ex-10-46-w-288e261b",
+          "prediction_index": 1,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "No additional fees of any kind may be paid to Galaticomm, except for fees stated within the agreement for software usage and/or bandwidth usage.",
+          "source_quotes": [
+            "There shall be no additional fees of any kind paid to Galaticomm, other than those stated within this agreement for software usage and/or bandwidth usage."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "galacticommtechnologiesinc-11-07-1997-ex-10-46-w-288e261b",
+          "prediction_index": 6,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "If Galacticomm, Inc. chooses to terminate the agreement, Horst Entertainment Inc. will have the right to purchase a license copy of the software for $15,000.00.",
+          "source_quotes": [
+            "In the event Galacticomm, Inc. chooses to terminate this agreement, Horst Entertainment Inc. will have the right to purchase a license copy of the software in the amount of $15,000.00."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "watchitmediainc-20061201-8-k-ex-10-1-4148672-ex--ba668c47",
+          "prediction_index": 2,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Watchit reserves the right to modify the content to reflect sponsorship by an advertiser and advertisers.",
+          "source_quotes": [
+            "and reserves the right to modify the content to reflect sponsorship by an advertiser and advertisers."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "watchitmediainc-20061201-8-k-ex-10-1-4148672-ex--ba668c47",
+          "prediction_index": 6,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Watchit has the exclusive right to sell third party advertising as sponsors of their content and has the right to brand the content under the Watchit brand and place a \"bug\" on the screen identifying the content with a Watchit trademark.",
+          "source_quotes": [
+            "Watchit shall have the exclusive right to sell third party advertising as sponsors of their content and will have the right to brand the content under the Watchit brand and place a \"bug\" on the screen identifying the content with a Watchit trademark."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "watchitmediainc-20061201-8-k-ex-10-1-4148672-ex--ba668c47",
+          "prediction_index": 9,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Oceanic Time Warner Cable is able to not include any content that it deems inappropriate or distasteful.",
+          "source_quotes": [
+            "Ocean Time Warner Cable will be able to not include any content that it deems inappropriate or distasteful."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "pacificsystemscontroltechnologyinc-08-24-2000-ex-4c46375e",
+          "prediction_index": 4,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Nothing in the Agreement is intended to confer on any party the right to assign its rights or obligations under the Agreement.",
+          "source_quotes": [
+            "All covenants, promises and agreements by or on behalf of the parties contained in this Agreement shall be binding upon and shall inure to the benefit of the successors and assigns of the  parties; but nothing in this Agreement, expressed or implied is intended to confer on any party the right to assign its rights or  obligations hereunder."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "pacificsystemscontroltechnologyinc-08-24-2000-ex-4c46375e",
+          "prediction_index": 5,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "The Agreement is not intended to confer rights or remedies on persons other than the parties and their respective successors and assigns, and it does not give any third person subrogation or action-over rights.",
+          "source_quotes": [
+            "Nothing in this Agreement, whether  expressed or implied, is intended to confer any rights or remedies  under or by reason of this Agreement on any persons other than the parties to it and their respective successors and assigns, nor is anything in this Agreement intended to relieve or discharge the obligation or liability of any third persons to any party to this Agreement, nor shall any provision give any third person any right of subrogation or action over or against any party to this  Agreement."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "primeenergyresourcescorp-04-02-2007-ex-10-28-com-762f17ca",
+          "prediction_index": 2,
+          "classification": "valid_alternate_atomization_of_existing_gold",
+          "related_gold_ids": [
+            "O001"
+          ],
+          "summary": "Once a Project Completion component is satisfied, Prime's absolute and unconditional warranty to Guaranty to fund the payment to Offshore of costs exceeding available commitments (including interest) for that component will expire.",
+          "source_quotes": [
+            "Once a component is satisfied, Prime's absolute and  unconditional warranty to Guaranty to fund the payment to Offshore of ad costs that esceed the available commitments under the Credit  Agreement for that conponent, including interest, wid ejpire."
+          ],
+          "review_note": "A source-supported component, condition, exception, amount, or separately phrased action already represented by the related gold obligation; useful alternate atomization, not a new gold duty."
+        },
+        {
+          "doc_id": "primeenergyresourcescorp-04-02-2007-ex-10-28-com-762f17ca",
+          "prediction_index": 4,
+          "classification": "valid_alternate_atomization_of_existing_gold",
+          "related_gold_ids": [
+            "O003"
+          ],
+          "summary": "The required liquidity will reduce dollar-for-dollar with any additional shareholder advances and increase dollar-for-dollar to a maximum of $21,000,000 with any repayment of shareholder advances.",
+          "source_quotes": [
+            "This required liquidity\"  win reduce dollar-for-dollar with any additional shareholder advance s and increase dollar-for-dollar to a maximum of $21,000,000 with any  repayment of shareholder advances.\""
+          ],
+          "review_note": "A source-supported component, condition, exception, amount, or separately phrased action already represented by the related gold obligation; useful alternate atomization, not a new gold duty."
+        },
+        {
+          "doc_id": "primeenergyresourcescorp-04-02-2007-ex-10-28-com-762f17ca",
+          "prediction_index": 6,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Prime understands that a breach of obligations under this Agreement would result in an Event of Default under the Credit Agreement with Offshore that would permit Guaranty to pursue its available remedies under the Credit Agreement.",
+          "source_quotes": [
+            "Prime understands that a breach ofobligations under this Agreement would result in an Event ofDefault under the Credit Agreement with  Offshore that would permit Guaranty to pursue its available remedies under the Credit Agreement."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "primeenergyresourcescorp-04-02-2007-ex-10-28-com-762f17ca",
+          "prediction_index": 7,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Offshore is executing this Agreement to acknowledge that a breach of this Agreement would result in an Event of Default under the Credit Agreement.",
+          "source_quotes": [
+            "Offshore is executing this Agreement to  acknowledge that a breach ofthis Agreement would result in an Event ofDefault under the Credit Agreement."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "versotechnologiesinc-12-28-2007-ex-99-3-intellec-9630dd45",
+          "prediction_index": 0,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Seller must transfer, sell, assign, convey and deliver to Backhaul all right, title and interest in, to and under the Assigned Intellectual Property (including the listed Trademarks, Patents, and associated goodwill).",
+          "source_quotes": [
+            "Seller does hereby transfer, sell, assign, convey and deliver to Backhaul all right, title and interest in, to and under the Assigned Intellectual Property, including, without limitation, the Trademarks and Patents set forth on Schedules A and B hereof, respectively, and all goodwill of the Purchased Business associated therewith."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "rgcresourcesinc-20151216-8-k-ex-10-3-9372751-ex--f744ccc2",
+          "prediction_index": 0,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Grantor grants to Grantee (and Grantee accepts) a franchise to construct, reconstruct, operate, maintain, repair, and extend a Gas Distribution System within Grantor's Territorial Limits.",
+          "source_quotes": [
+            "Grantor hereby grants to Grantee and Grantee hereby accepts a franchise to construct, reconstruct, operate, maintain, repair, and extend a Gas Distribution System within Grantor's Territorial Limits in accordance with the terms and conditions set forth below (\"Franchise\")."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 0,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Audit/access limitation: BOSCH reserves the right to keep product generation and delivery confidential and states it is not available for any type of audit.",
+          "source_quotes": [
+            "BOSCH reserves the right in keeping product generation and delivery confidential in which is not available for any type of audit."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 1,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "BOSCH reserves the right to share rights given, unless doing so disrupts or interferes with CLIENTS business and/or productivity.",
+          "source_quotes": [
+            "BOSCH reserves the right to share rights given unless it disrupts and/or interferes with CLIENTS business and/or productivity."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 2,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "BOSCH grants CLIENT the \"Exclusive Distribution License Rights\" to sell and distribute the Products within the \"Territory\".",
+          "source_quotes": [
+            "5. RIGHTS GRANTED: BOSCH hereby grants CLIENT the \"Exclusive Distribution License Rights\" sell and distribute the Products within the \"Territory\"."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 3,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "BOSCH grants CLIENT un-exclusive \"Reserved Rights\" to sell and distribute the \"Product\" within the \"Territory\".",
+          "source_quotes": [
+            "BOSCH hereby grants CLIENT un-exclusive \"Reserved Rights\" to sell and distribute the \"Product\" within the \"Territory\"."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 4,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "BOSCH grants Client exclusive rights to sell and distribute the Product (subject to the Territory) to certain select automotive companies, each of which must be approved by Bosch in writing as requested by the Client on a case by case basis.",
+          "source_quotes": [
+            "6. EXCLUSIVE RIGHTS: Bosch hereby grants to Client the exclusive rights to sell and distribute the Product, subject to the Territory as set forth below, to certain select companies in the Automotive Industry, each of which shall be approved by Bosch in writing as requested by the Client on a case by case basis."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 5,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Territory is defined as United States of America and Canada, excluding the US Virgin Islands.",
+          "source_quotes": [
+            "7. TERRITORY: United States of America and Canada, excluding the US Virgin Islands"
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 6,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Reserved-rights activity is stated to be in concert and approval with BOSCH and limited to any and all of BOSCH's current clients.",
+          "source_quotes": [
+            "8. RESERVED RIGHTS: All business, locations, entities, people, etc... without any limitations. This is in concert and approval with BOSCH and is limited to any and all of BOSCH's current clients."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 8,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Cost of product is based upon square inch and is reserved confidentially.",
+          "source_quotes": [
+            "(i) COST OF PRODUCT: Cost is based upon square inch and reserved confidentially."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 9,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "The established market price will be negotiated confidentially but will follow the max and min limitations allowed.",
+          "source_quotes": [
+            "(ii) COST OF PRODUCT TO MARKET: The established price for the market place will be negotiated confidentially but will follow the max and min limitations allowed."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 16,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Examples are provided relating to the city, state and/or federal contract accounts context (exit signs, safety fixtures, freeway signs, etc...).",
+          "source_quotes": [
+            "(Exit signs in and on buildings, mandatory safety fixtures, freeway signs, etc...)"
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 18,
+          "classification": "duplicate_or_fragmentation",
+          "related_gold_ids": [
+            "O014",
+            "O015"
+          ],
+          "summary": "Confidentiality clause includes CLIENT acknowledgment that irreparable injury and damage will result from disclosure to any third party of Proprietary Information associated with the Product.",
+          "source_quotes": [
+            "10. CONFIDENTIALITY: CLIENT acknowledges that irreparable injury and damage will result from the disclosure to any third party of Proprietary Information associated with the Product"
+          ],
+          "review_note": "This acknowledgement is a non-operative preamble fragment of the matched confidentiality restrictions O014/O015."
+        },
+        {
+          "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+          "prediction_index": 21,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "By signing in the spaces provided below, BOSCH and CLIENT accept and agree to all terms and conditions of the Agreement.",
+          "source_quotes": [
+            "By signing in the spaces provided below BOSCH and CLIENT accept and agree to all of the terms and conditions of this Agreement."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+          "prediction_index": 0,
+          "classification": "valid_alternate_atomization_of_existing_gold",
+          "related_gold_ids": [
+            "O001"
+          ],
+          "summary": "Shi Farms agrees to sell Product to Gridiron.",
+          "source_quotes": [
+            "Shi Farms agrees to sell Product and Gridiron agrees to purchase 30,000 lbs. of hemp biomass (\"Biomass\") from Shi Farms."
+          ],
+          "review_note": "Valid seller side of gold O001; the matcher instead assigns O001 to the contaminant-specification fragment."
+        },
+        {
+          "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+          "prediction_index": 2,
+          "classification": "valid_alternate_atomization_of_existing_gold",
+          "related_gold_ids": [
+            "O003"
+          ],
+          "summary": "The purchase price is $5.00 per pound for a total cost of $150,000.",
+          "source_quotes": [
+            "Both Parties mutually agree that the Purchase Price of the Product is determined on a $5.00 per pound basis for a total cost of one hundred fifty thousand dollars ($150,000)."
+          ],
+          "review_note": "Valid amount component of gold O003, whose payment-timing record receives the match."
+        },
+        {
+          "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+          "prediction_index": 4,
+          "classification": "valid_alternate_atomization_of_existing_gold",
+          "related_gold_ids": [
+            "O001"
+          ],
+          "summary": "Biomass must contain a minimum of six percent (6%) total Cannabidiol (CBD/and or CBDA).",
+          "source_quotes": [
+            "Biomass must contain a minimum of six percent (6%) total Cannabidiol (CBD/and or CBDA)"
+          ],
+          "review_note": "A source-supported component, condition, exception, amount, or separately phrased action already represented by the related gold obligation; useful alternate atomization, not a new gold duty."
+        },
+        {
+          "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+          "prediction_index": 5,
+          "classification": "valid_alternate_atomization_of_existing_gold",
+          "related_gold_ids": [
+            "O001"
+          ],
+          "summary": "All Biomass must have less than three percent (3%) total TCH content.",
+          "source_quotes": [
+            "and all Biomass must have less than three percent (3%) total TCH content."
+          ],
+          "review_note": "A source-supported component, condition, exception, amount, or separately phrased action already represented by the related gold obligation; useful alternate atomization, not a new gold duty."
+        },
+        {
+          "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+          "prediction_index": 7,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Buyer may take its own samples (Product Samples) for testing.",
+          "source_quotes": [
+            "Both Parties agree that CBD potency numbers are determined by a third-party lab according to standard testing protocol which was provided by the seller. Buyer may take their own samples (\"Product Samples\") for testing as well."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+          "prediction_index": 9,
+          "classification": "valid_alternate_atomization_of_existing_gold",
+          "related_gold_ids": [
+            "O005"
+          ],
+          "summary": "The point of delivery of Product Samples is a laboratory determined by Gridiron if Gridiron determines third party analysis is required for processing.",
+          "source_quotes": [
+            "Product Samples. The point of delivery of the Product Samples shall be a laboratory determined by Gridiron, if Gridiron determines that third party analysis of the Biomass is required for processing."
+          ],
+          "review_note": "A source-supported component, condition, exception, amount, or separately phrased action already represented by the related gold obligation; useful alternate atomization, not a new gold duty."
+        },
+        {
+          "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+          "prediction_index": 12,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Either party may terminate the Agreement at any time prior to delivery of the Product.",
+          "source_quotes": [
+            "Either Party may terminate this Agreement at any time prior to delivery of the Product."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+          "prediction_index": 16,
+          "classification": "quote_or_evaluator_artifact",
+          "related_gold_ids": [
+            "O012"
+          ],
+          "summary": "Notices to Shi Farms must be sent to the stated address/ATTN.",
+          "source_quotes": [
+            "Shi Farms:214 39t h Lane Pueblo, CO 81006 ATTN: Steven Turetsky"
+          ],
+          "review_note": "The address is a valid notice destination detail for Gridiron-to-Shi Farms notices, but the evidence is only an address line and cannot overlap the operative gold quote."
+        },
+        {
+          "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+          "prediction_index": 17,
+          "classification": "quote_or_evaluator_artifact",
+          "related_gold_ids": [
+            "O011"
+          ],
+          "summary": "Notices to Gridiron must be sent to the stated address/ATTN.",
+          "source_quotes": [
+            "Gridiron: 1119 West 1st Ave - Suite G Spokane, WA 99021 ATTN: Tim Orr"
+          ],
+          "review_note": "The address is a valid notice destination detail for Shi Farms-to-Gridiron notices, but the evidence is only an address line and cannot overlap the operative gold quote."
+        },
+        {
+          "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+          "prediction_index": 18,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "The Agreement may not be waived, amended or assigned unless there is an agreed written and signed document signed by both parties.",
+          "source_quotes": [
+            "This Agreement may not be waived, amended or assigned without an agreed written and signed document, signed by both Parties."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+          "prediction_index": 20,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Failure to return the information constitutes a material breach, with all rights and remedies available to the party whose material has been disclosed.",
+          "source_quotes": [
+            "Failure to do so shall constitute a material breach of this Agreement with all rights and remedies available to the party whose material has been Disclosed."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+          "prediction_index": 1,
+          "classification": "quote_or_evaluator_artifact",
+          "related_gold_ids": [
+            "O003"
+          ],
+          "summary": "The Operating Company must reimburse EmployeeCo for all direct or indirect costs and expenses incurred by EmployeeCo in connection with performing its obligations under this Agreement.",
+          "source_quotes": [
+            "The Operating Company shall reimburse EmployeeCo for all direct or indirect costs and expenses incurred by EmployeeCo in connection with performing its obligations under this Agreement including, but not limited to:"
+          ],
+          "review_note": "This broad reimbursement prediction directly represents gold O003, but greedy matching assigns O003 to narrow tax sub-item prediction 7; this is a clear evaluator pairing artifact."
+        },
+        {
+          "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+          "prediction_index": 2,
+          "classification": "valid_alternate_atomization_of_existing_gold",
+          "related_gold_ids": [
+            "O003"
+          ],
+          "summary": "The Operating Company must make reimbursements to EmployeeCo in advance or immediately upon such costs being incurred, or otherwise in accordance with historical practice, unless otherwise agreed.",
+          "source_quotes": [
+            "Such reimbursements shall be made by the Operating Company to EmployeeCo in advance or immediately upon such costs being incurred, or otherwise in accordance with historical practice, unless otherwise agreed between the Operating Company and EmployeeCo."
+          ],
+          "review_note": "A source-supported component, condition, exception, amount, or separately phrased action already represented by the related gold obligation; useful alternate atomization, not a new gold duty."
+        },
+        {
+          "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+          "prediction_index": 3,
+          "classification": "duplicate_or_fragmentation",
+          "related_gold_ids": [
+            "O003"
+          ],
+          "summary": "The Operating Company must reimburse EmployeeCo for salaries of the Services Employees.",
+          "source_quotes": [
+            "(a) salaries of the Services Employees;"
+          ],
+          "review_note": "A redundant preamble or sub-item fragment of an existing matched obligation; source-supported but harmful to raw record precision/usability."
+        },
+        {
+          "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+          "prediction_index": 4,
+          "classification": "duplicate_or_fragmentation",
+          "related_gold_ids": [
+            "O003"
+          ],
+          "summary": "The Operating Company must reimburse EmployeeCo for the cost of employee benefits for the Services Employees, including specified benefits.",
+          "source_quotes": [
+            "(b) the cost of employee benefits for the Services Employees, including 401(k), pension, bonuses and health insurance benefits (whether through insurance policies provided by third-parties or self-insurance);"
+          ],
+          "review_note": "A redundant preamble or sub-item fragment of an existing matched obligation; source-supported but harmful to raw record precision/usability."
+        },
+        {
+          "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+          "prediction_index": 5,
+          "classification": "duplicate_or_fragmentation",
+          "related_gold_ids": [
+            "O003"
+          ],
+          "summary": "The Operating Company must reimburse EmployeeCo for costs associated with workers' compensation claims and other disputes or liabilities associated with the Services Employees.",
+          "source_quotes": [
+            "(c) costs associated with workers' compensation claims and other disputes or liabilities associated with the Services Employees;"
+          ],
+          "review_note": "A redundant preamble or sub-item fragment of an existing matched obligation; source-supported but harmful to raw record precision/usability."
+        },
+        {
+          "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+          "prediction_index": 6,
+          "classification": "duplicate_or_fragmentation",
+          "related_gold_ids": [
+            "O003"
+          ],
+          "summary": "The Operating Company must reimburse EmployeeCo for severance costs with respect to any terminated Services Employees.",
+          "source_quotes": [
+            "(d) severance costs with respect to any terminated Services Employees; and"
+          ],
+          "review_note": "A redundant preamble or sub-item fragment of an existing matched obligation; source-supported but harmful to raw record precision/usability."
+        },
+        {
+          "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+          "prediction_index": 9,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Each Party submits to the jurisdiction of the state and federal courts in the State of Colorado and to venue in Denver, Colorado.",
+          "source_quotes": [
+            "Each Party hereby submits to the jurisdiction of the state and federal courts in the State of Colorado and to venue in Denver, Colorado."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+          "prediction_index": 11,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "The Agreement may be terminated by the written agreement of the Parties.",
+          "source_quotes": [
+            "This Agreement may be terminated by (a) the written agreement of the Parties or (b) by either Party upon 5 days written notice to the other Party."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+          "prediction_index": 12,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Either Party may terminate the Agreement upon 5 days written notice to the other Party.",
+          "source_quotes": [
+            "This Agreement may be terminated by (a) the written agreement of the Parties or (b) by either Party upon 5 days written notice to the other Party."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+          "prediction_index": 13,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "The Agreement may be amended or modified from time to time only by the written agreement of all the Parties hereto.",
+          "source_quotes": [
+            "This Agreement may be amended or modified from time to time only by the written agreement of all the Parties hereto."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+          "prediction_index": 14,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Each amendment or addendum instrument must be reduced to writing and designated on its face an \"Amendment\" or an \"Addendum\" to this Agreement.",
+          "source_quotes": [
+            "Each such instrument shall be reduced to writing and shall be designated on its face an \"Amendment\" or an \"Addendum\" to this Agreement."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+          "prediction_index": 0,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Principal appoints Distributor as a non-exclusive distributor to sell the listed Products.",
+          "source_quotes": [
+            "The Principal appoints the Distributor as a non-exclusive distributor, to sell Principal's qPCR infectious disease kits, Logix Smart COVID-19 PCR diagnostic test and Co-Dx Box™ instrument (the \"Products\")."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+          "prediction_index": 1,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Principal grants Distributor non-exclusive rights to sell the products within Romania (the Territory).",
+          "source_quotes": [
+            "The Principal grants Distributor non- exclusive rights to sell these products within the countries of Romania (the \"Territory\"),"
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+          "prediction_index": 11,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "In the event of termination, Distributor is entitled to receive all orders accepted by Principal prior to the date of termination.",
+          "source_quotes": [
+            "In the event of termination, the Distributor shall be entitled to receive all orders accepted by the Principal prior to the date of termination and may sell the ordered Products in the Territory."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+          "prediction_index": 15,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Distributor’s submitted orders are subject to acceptance by Principal in Principal’s sole discretion.",
+          "source_quotes": [
+            "it being understood and agreed that all orders submitted by the Distributor are subject to acceptance by Principal in its sole discretion."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+          "prediction_index": 16,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Any change or modification is not valid unless it is in writing and signed by the parties (applies to Principal).",
+          "source_quotes": [
+            "No change or modification of this Agreement shall be valid unless the same be in writing and signed by the parties."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+          "prediction_index": 17,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Any change or modification is not valid unless it is in writing and signed by the parties (applies to Distributor).",
+          "source_quotes": [
+            "No change or modification of this Agreement shall be valid unless the same be in writing and signed by the parties."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+          "prediction_index": 23,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Principal represents it has the right to enter into the Agreement and that the Agreement does not violate any agreement to which it is a party.",
+          "source_quotes": [
+            "Each of Principal and Distributor represents that it has the right to enter into this Agreement and that this Agreement does not violate any agreement to which it is a party."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+          "prediction_index": 24,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Distributor represents it has the right to enter into the Agreement and that the Agreement does not violate any agreement to which it is a party.",
+          "source_quotes": [
+            "Each of Principal and Distributor represents that it has the right to enter into this Agreement and that this Agreement does not violate any agreement to which it is a party."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        },
+        {
+          "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+          "prediction_index": 25,
+          "classification": "genuine_unsupported_right_option_or_factual_over_extraction",
+          "related_gold_ids": [],
+          "summary": "Principal represents that it owns or has rights to the intellectual property embodied in the Products.",
+          "source_quotes": [
+            "Principal represents that it owns or has rights to the intellectual property embodied in the Products."
+          ],
+          "review_note": "The quoted text is real, but it states a right, option, grant, fact, representation, acknowledgement, legal effect, consequence, or passive formality rather than a performing-party obligation under the reviewed ontology."
+        }
+      ]
+    },
+    "schema_completeness_review": {
+      "field": "IsPostTermination",
+      "standard": {
+        "present": 43,
+        "matched": 43,
+        "coverage": 1.0,
+        "correct": 41,
+        "effective_accuracy": 0.9534883720930233
+      },
+      "agentic": {
+        "present": 4,
+        "matched": 72,
+        "coverage": 0.05555555555555555,
+        "correct": 4,
+        "effective_accuracy": 0.05555555555555555,
+        "conditional_accuracy_when_present": 1.0
+      },
+      "assessment": "Material Agentic weakness. Most Agentic matched records omit the boolean rather than emitting false. The corrected fail-closed evaluator properly counts missing values as uncovered and incorrect; the previous default-to-false behavior masked this schema-completeness failure."
+    }
+  },
+  "comparative_error_taxonomy": {
+    "false_negatives": {
+      "standard": {
+        "total": 54,
+        "atomicity_or_one_to_one": 21,
+        "true_source_content_misses": 33
+      },
+      "agentic": {
+        "total": 25,
+        "atomicity_or_one_to_one": 20,
+        "true_source_content_misses": 5
+      },
+      "interpretation": "Agentic nearly eliminates clause-level omissions but does not eliminate under-splitting. Its remaining deterministic misses are 80% atomization artifacts versus 39% for Standard."
+    },
+    "unmatched_predictions": {
+      "standard": {
+        "total": 12,
+        "genuine_unsupported": 12,
+        "alternate_atomization": 0,
+        "duplicate_fragmentation": 0,
+        "quote_evaluator_artifact": 0,
+        "gold_omission": 0
+      },
+      "agentic": {
+        "total": 57,
+        "genuine_unsupported": 41,
+        "alternate_atomization": 8,
+        "duplicate_fragmentation": 5,
+        "quote_evaluator_artifact": 3,
+        "gold_omission": 0
+      }
+    },
+    "agentic_genuine_unsupported_subtypes": {
+      "rights_options_present_grants_or_conveyances": 19,
+      "facts_legal_effects_representations_acknowledgements_or_formalities": 22
+    },
+    "field_quality_deltas_percentage_points": {
+      "type": -2.2286821705,
+      "nature": 19.2183462532,
+      "obligor": -5.0387596899,
+      "obligee": -2.6162790698,
+      "required_details": 4.5535714286,
+      "post_termination_accuracy": -89.79328165374677,
+      "post_termination_coverage": -94.44444444444444
+    },
+    "cross_cutting_patterns": [
+      "Agentic expands reciprocal duties much better but frequently emits one generic each/both-party record alongside or instead of fully role-resolved atoms.",
+      "Agentic over-extracts rights, options, present grants, factual representations, acknowledgements, legal effects, and amendment/termination formalities.",
+      "Agentic fragments economic schedules and lists into extra records, especially TransMontaigne reimbursement items and Gridiron product specifications.",
+      "Both modes struggle to express related obligation IDs and exact required details.",
+      "Standard is predominantly under-inclusive; Agentic trades much of that omission risk for review burden and ontology noise."
+    ]
+  },
+  "evaluator_assessment": {
+    "fairness_of_precision": "The 55.8% deterministic precision is conservative because 16/57 unmatched predictions are source-supported alternate atoms, fragments, or evaluator artifacts. It is still directionally fair for raw production usability: all 57 are extra records requiring reconciliation, 41 are genuine non-obligations, and one matched TransMontaigne record is itself an exception/right rather than the gold prohibition.",
+    "fairness_of_recall": "The 74.2% recall fairly measures compliance with the requested one-party/one-action atomic output, but understates clause discovery. Twenty of 25 misses have 1.0 quote support in an already-used prediction, yielding 92/97 (94.8%) quote-supported clause coverage. Conversely, TransMontaigne O007 is a semantic false match, so 72/97 should not be read as 72 fully correct atomic records.",
+    "matcher_findings": [
+      "All deterministic selected alignments score 1.0 because containment returns 1.0; broad and narrow evidence are therefore tied.",
+      "Greedy reverse tuple ordering selects the narrow TransMontaigne tax item for O003 and leaves the correct broad reimbursement record unmatched.",
+      "TransMontaigne prediction 16 describes only the permitted collateral-assignment exception/right, yet it matches gold O007, whose predicate is the no-assignment prohibition.",
+      "PreCheck communication predictions 20 and 21 are semantically swapped across gold O018/O020 because all four atoms share the same quote; set coverage is correct, pair-level IDs are not.",
+      "Gridiron O001 is assigned to the contaminant fragment while the seller, CBD, and THC components are counted unmatched; this depresses precision without indicating unsupported text.",
+      "Twenty gold atoms are left unmatched solely because one-to-one matching cannot give a merged reciprocal/multi-action prediction credit for more than one atom."
+    ],
+    "grounding_findings": [
+      "The 98.18% Agentic groundedness is 162/165.",
+      "All three failures are in Prime and become exact source substrings after removing one extra terminal quotation mark.",
+      "This is a punctuation-normalization artifact, not substantive evidence fabrication."
+    ],
+    "duplicate_findings": [
+      "duplicate_count=0 only detects identical obligor/summary/first-quote signatures.",
+      "Agentic contains 26 repeated evidence entries within 17 predictions.",
+      "It also contains semantic list fragmentation that the duplicate metric does not detect."
+    ],
+    "recommended_evaluator_tests": [
+      "Replace greedy matching with maximum-weight bipartite assignment plus deterministic semantic tie-breaking.",
+      "Report clause-level many-to-one coverage separately from atomic one-to-one correctness.",
+      "Add parent-clause/group IDs so merged and split outputs can be distinguished from unsupported predictions.",
+      "Cluster semantic fragments/duplicates rather than relying only on exact signatures.",
+      "Normalize harmless terminal quote punctuation for evidence groundedness.",
+      "Keep party/type/nature/detail scoring separate, but add a gated fully-correct-atom metric."
+    ],
+    "schema_completeness_findings": [
+      "The corrected evaluator distinguishes field accuracy from field coverage and fails closed when IsPostTermination is missing.",
+      "Standard provides IsPostTermination for all 43 matches and gets 41 correct: 95.3% effective accuracy, 100% coverage.",
+      "Agentic provides IsPostTermination for only 4 of 72 matches; all four are correct, but effective accuracy and coverage are both 5.6%.",
+      "The prior missing-to-false default would have incorrectly credited most omitted Agentic values because most gold records are false."
+    ]
+  },
+  "per_contract": [
+    {
+      "doc_id": "galacticommtechnologiesinc-11-07-1997-ex-10-46-w-288e261b",
+      "standard": {
+        "gold_count": 6,
+        "predicted_count": 4,
+        "matched_count": 3,
+        "false_positive_count": 1,
+        "false_negative_count": 3,
+        "precision": 0.75,
+        "recall": 0.5,
+        "post_termination_correct": 3,
+        "post_termination_present": 3
+      },
+      "agentic": {
+        "gold_count": 6,
+        "predicted_count": 7,
+        "matched_count": 4,
+        "false_positive_count": 3,
+        "false_negative_count": 2,
+        "precision": 0.5714285714285714,
+        "recall": 0.6666666666666666,
+        "type_correct": 4,
+        "nature_correct": 2,
+        "obligor_correct": 4,
+        "obligee_correct": 3,
+        "required_detail_correct": 2,
+        "required_detail_total": 10,
+        "post_termination_correct": 0,
+        "post_termination_present": 0
+      },
+      "agentic_false_negative_review": {
+        "atomicity_or_one_to_one_gold_ids": [
+          "O001",
+          "O004"
+        ],
+        "true_unrepresented_gold_ids": [],
+        "quote_supported_gold_atoms": 6
+      },
+      "agentic_unmatched_breakdown": {
+        "genuine_unsupported_right_option_or_factual_over_extraction": 3
+      },
+      "comparison": "Agentic splits weekly remittance from rates, improving 3 to 4 matches, but still merges first/second price tiers and support staffing/availability. Its three extras are prior-agreement legal effect, passive no-fee language, and the purchase option."
+    },
+    {
+      "doc_id": "watchitmediainc-20061201-8-k-ex-10-1-4148672-ex--ba668c47",
+      "standard": {
+        "gold_count": 9,
+        "predicted_count": 10,
+        "matched_count": 8,
+        "false_positive_count": 2,
+        "false_negative_count": 1,
+        "precision": 0.8,
+        "recall": 0.8888888888888888,
+        "post_termination_correct": 8,
+        "post_termination_present": 8
+      },
+      "agentic": {
+        "gold_count": 9,
+        "predicted_count": 12,
+        "matched_count": 9,
+        "false_positive_count": 3,
+        "false_negative_count": 0,
+        "precision": 0.75,
+        "recall": 1.0,
+        "type_correct": 4,
+        "nature_correct": 8,
+        "obligor_correct": 9,
+        "obligee_correct": 9,
+        "required_detail_correct": 8,
+        "required_detail_total": 10,
+        "post_termination_correct": 0,
+        "post_termination_present": 0
+      },
+      "agentic_false_negative_review": {
+        "atomicity_or_one_to_one_gold_ids": [],
+        "true_unrepresented_gold_ids": [],
+        "quote_supported_gold_atoms": 9
+      },
+      "agentic_unmatched_breakdown": {
+        "genuine_unsupported_right_option_or_factual_over_extraction": 3
+      },
+      "comparison": "Agentic reaches 9/9 and correctly emits both pre-publicity discussion sides; Standard collapsed them. All three extras are explicit rights/options, so the recall win is real but precision loss is avoidable ontology leakage."
+    },
+    {
+      "doc_id": "pacificsystemscontroltechnologyinc-08-24-2000-ex-4c46375e",
+      "standard": {
+        "gold_count": 6,
+        "predicted_count": 6,
+        "matched_count": 4,
+        "false_positive_count": 2,
+        "false_negative_count": 2,
+        "precision": 0.6666666666666666,
+        "recall": 0.6666666666666666,
+        "post_termination_correct": 4,
+        "post_termination_present": 4
+      },
+      "agentic": {
+        "gold_count": 6,
+        "predicted_count": 7,
+        "matched_count": 5,
+        "false_positive_count": 2,
+        "false_negative_count": 1,
+        "precision": 0.7142857142857143,
+        "recall": 0.8333333333333334,
+        "type_correct": 4,
+        "nature_correct": 4,
+        "obligor_correct": 3,
+        "obligee_correct": 3,
+        "required_detail_correct": 6,
+        "required_detail_total": 9,
+        "post_termination_correct": 0,
+        "post_termination_present": 0
+      },
+      "agentic_false_negative_review": {
+        "atomicity_or_one_to_one_gold_ids": [
+          "O005"
+        ],
+        "true_unrepresented_gold_ids": [],
+        "quote_supported_gold_atoms": 6
+      },
+      "agentic_unmatched_breakdown": {
+        "genuine_unsupported_right_option_or_factual_over_extraction": 2
+      },
+      "comparison": "Agentic finds the mediation clause Standard missed, but emits one parties-level record, so one reciprocal gold side remains unmatched. The passive excerpt-approval clause still has the wrong obligor, and two legal-effect clauses are over-extracted."
+    },
+    {
+      "doc_id": "primeenergyresourcescorp-04-02-2007-ex-10-28-com-762f17ca",
+      "standard": {
+        "gold_count": 4,
+        "predicted_count": 4,
+        "matched_count": 4,
+        "false_positive_count": 0,
+        "false_negative_count": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "post_termination_correct": 4,
+        "post_termination_present": 4
+      },
+      "agentic": {
+        "gold_count": 4,
+        "predicted_count": 8,
+        "matched_count": 4,
+        "false_positive_count": 4,
+        "false_negative_count": 0,
+        "precision": 0.5,
+        "recall": 1.0,
+        "type_correct": 4,
+        "nature_correct": 3,
+        "obligor_correct": 4,
+        "obligee_correct": 2,
+        "required_detail_correct": 5,
+        "required_detail_total": 14,
+        "post_termination_correct": 0,
+        "post_termination_present": 0
+      },
+      "agentic_false_negative_review": {
+        "atomicity_or_one_to_one_gold_ids": [],
+        "true_unrepresented_gold_ids": [],
+        "quote_supported_gold_atoms": 4
+      },
+      "agentic_unmatched_breakdown": {
+        "valid_alternate_atomization_of_existing_gold": 2,
+        "genuine_unsupported_right_option_or_factual_over_extraction": 2
+      },
+      "comparison": "Both modes find all four gold duties. Agentic adds useful expiry and liquidity-adjustment atoms plus two factual/legal-effect records, moving precision to 50%. Detail accuracy improves from 2/14 to 5/14 but remains poor; three quote failures are trailing-mark artifacts."
+    },
+    {
+      "doc_id": "versotechnologiesinc-12-28-2007-ex-99-3-intellec-9630dd45",
+      "standard": {
+        "gold_count": 2,
+        "predicted_count": 2,
+        "matched_count": 1,
+        "false_positive_count": 1,
+        "false_negative_count": 1,
+        "precision": 0.5,
+        "recall": 0.5,
+        "post_termination_correct": 1,
+        "post_termination_present": 1
+      },
+      "agentic": {
+        "gold_count": 2,
+        "predicted_count": 2,
+        "matched_count": 1,
+        "false_positive_count": 1,
+        "false_negative_count": 1,
+        "precision": 0.5,
+        "recall": 0.5,
+        "type_correct": 0,
+        "nature_correct": 1,
+        "obligor_correct": 1,
+        "obligee_correct": 1,
+        "required_detail_correct": 2,
+        "required_detail_total": 4,
+        "post_termination_correct": 0,
+        "post_termination_present": 0
+      },
+      "agentic_false_negative_review": {
+        "atomicity_or_one_to_one_gold_ids": [
+          "O002"
+        ],
+        "true_unrepresented_gold_ids": [],
+        "quote_supported_gold_atoms": 2
+      },
+      "agentic_unmatched_breakdown": {
+        "genuine_unsupported_right_option_or_factual_over_extraction": 1
+      },
+      "comparison": "No discovery improvement: both modes capture Seller further assurances but fail to emit Backhaul cost-bearing separately and both treat the effective present conveyance as a duty. Agentic is far slower and more expensive for the same 1/2 atomic result."
+    },
+    {
+      "doc_id": "rgcresourcesinc-20151216-8-k-ex-10-3-9372751-ex--f744ccc2",
+      "standard": {
+        "gold_count": 7,
+        "predicted_count": 3,
+        "matched_count": 3,
+        "false_positive_count": 0,
+        "false_negative_count": 4,
+        "precision": 1.0,
+        "recall": 0.42857142857142855,
+        "post_termination_correct": 3,
+        "post_termination_present": 3
+      },
+      "agentic": {
+        "gold_count": 7,
+        "predicted_count": 6,
+        "matched_count": 5,
+        "false_positive_count": 1,
+        "false_negative_count": 2,
+        "precision": 0.8333333333333334,
+        "recall": 0.7142857142857143,
+        "type_correct": 5,
+        "nature_correct": 4,
+        "obligor_correct": 4,
+        "obligee_correct": 1,
+        "required_detail_correct": 5,
+        "required_detail_total": 14,
+        "post_termination_correct": 0,
+        "post_termination_present": 0
+      },
+      "agentic_false_negative_review": {
+        "atomicity_or_one_to_one_gold_ids": [
+          "O001",
+          "O006"
+        ],
+        "true_unrepresented_gold_ids": [],
+        "quote_supported_gold_atoms": 7
+      },
+      "agentic_unmatched_breakdown": {
+        "genuine_unsupported_right_option_or_factual_over_extraction": 1
+      },
+      "comparison": "Agentic improves 3 to 5 matches and has source support for all seven duties. It separates office duration/hours but merges base/future fee atoms and both notice sides. The only unmatched prediction is the present franchise grant."
+    },
+    {
+      "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+      "standard": {
+        "gold_count": 15,
+        "predicted_count": 6,
+        "matched_count": 3,
+        "false_positive_count": 3,
+        "false_negative_count": 12,
+        "precision": 0.5,
+        "recall": 0.2,
+        "post_termination_correct": 3,
+        "post_termination_present": 3
+      },
+      "agentic": {
+        "gold_count": 15,
+        "predicted_count": 22,
+        "matched_count": 10,
+        "false_positive_count": 12,
+        "false_negative_count": 5,
+        "precision": 0.45454545454545453,
+        "recall": 0.6666666666666666,
+        "type_correct": 8,
+        "nature_correct": 8,
+        "obligor_correct": 9,
+        "obligee_correct": 3,
+        "required_detail_correct": 1,
+        "required_detail_total": 19,
+        "post_termination_correct": 0,
+        "post_termination_present": 0
+      },
+      "agentic_false_negative_review": {
+        "atomicity_or_one_to_one_gold_ids": [
+          "O002",
+          "O006",
+          "O011",
+          "O012"
+        ],
+        "true_unrepresented_gold_ids": [
+          "O001"
+        ],
+        "quote_supported_gold_atoms": 14
+      },
+      "agentic_unmatched_breakdown": {
+        "genuine_unsupported_right_option_or_factual_over_extraction": 11,
+        "duplicate_or_fragmentation": 1
+      },
+      "comparison": "Agentic produces the largest substantive gain: 10 matches versus Standard 3 and 14/15 clause support, finding costs, manufacturing/delivery, pricing approval, and split confidentiality. It also emits 11 genuine rights/facts/legal effects and one confidentiality preamble fragment; atomic indemnity and responsibility splitting remain incomplete."
+    },
+    {
+      "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+      "standard": {
+        "gold_count": 16,
+        "predicted_count": 6,
+        "matched_count": 5,
+        "false_positive_count": 1,
+        "false_negative_count": 11,
+        "precision": 0.8333333333333334,
+        "recall": 0.3125,
+        "post_termination_correct": 5,
+        "post_termination_present": 5
+      },
+      "agentic": {
+        "gold_count": 16,
+        "predicted_count": 21,
+        "matched_count": 10,
+        "false_positive_count": 11,
+        "false_negative_count": 6,
+        "precision": 0.47619047619047616,
+        "recall": 0.625,
+        "type_correct": 8,
+        "nature_correct": 6,
+        "obligor_correct": 7,
+        "obligee_correct": 7,
+        "required_detail_correct": 7,
+        "required_detail_total": 26,
+        "post_termination_correct": 1,
+        "post_termination_present": 1
+      },
+      "agentic_false_negative_review": {
+        "atomicity_or_one_to_one_gold_ids": [
+          "O007",
+          "O009",
+          "O011",
+          "O013",
+          "O014",
+          "O015"
+        ],
+        "true_unrepresented_gold_ids": [],
+        "quote_supported_gold_atoms": 16
+      },
+      "agentic_unmatched_breakdown": {
+        "valid_alternate_atomization_of_existing_gold": 5,
+        "genuine_unsupported_right_option_or_factual_over_extraction": 4,
+        "quote_or_evaluator_artifact": 2
+      },
+      "comparison": "Agentic has source support for all 16 gold duties and doubles deterministic matches from 5 to 10. Five unmatched records are valid alternate product/price/sample atoms and two are notice-address evidence artifacts; four are genuine non-obligations. Reciprocal notices, indemnity verbs, and termination confidentiality remain merged."
+    },
+    {
+      "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+      "standard": {
+        "gold_count": 11,
+        "predicted_count": 5,
+        "matched_count": 4,
+        "false_positive_count": 1,
+        "false_negative_count": 7,
+        "precision": 0.8,
+        "recall": 0.36363636363636365,
+        "post_termination_correct": 2,
+        "post_termination_present": 4
+      },
+      "agentic": {
+        "gold_count": 11,
+        "predicted_count": 18,
+        "matched_count": 7,
+        "false_positive_count": 11,
+        "false_negative_count": 4,
+        "precision": 0.3888888888888889,
+        "recall": 0.6363636363636364,
+        "type_correct": 6,
+        "nature_correct": 3,
+        "obligor_correct": 3,
+        "obligee_correct": 3,
+        "required_detail_correct": 11,
+        "required_detail_total": 22,
+        "post_termination_correct": 1,
+        "post_termination_present": 1
+      },
+      "agentic_false_negative_review": {
+        "atomicity_or_one_to_one_gold_ids": [
+          "O001",
+          "O008",
+          "O009",
+          "O010"
+        ],
+        "true_unrepresented_gold_ids": [],
+        "quote_supported_gold_atoms": 11
+      },
+      "agentic_unmatched_breakdown": {
+        "quote_or_evaluator_artifact": 1,
+        "valid_alternate_atomization_of_existing_gold": 1,
+        "duplicate_or_fragmentation": 4,
+        "genuine_unsupported_right_option_or_factual_over_extraction": 5
+      },
+      "comparison": "Agentic covers all gold clauses and increases matches from 4 to 7, but heavily fragments reimbursement into list items. Greedy matching assigns O003 to a tax fragment and leaves the correct broad reimbursement record unmatched. The exception-only collateral-assignment right is incorrectly counted as O007, so the nominal recall slightly overstates atomic correctness."
+    },
+    {
+      "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+      "standard": {
+        "gold_count": 21,
+        "predicted_count": 9,
+        "matched_count": 8,
+        "false_positive_count": 1,
+        "false_negative_count": 13,
+        "precision": 0.8888888888888888,
+        "recall": 0.38095238095238093,
+        "post_termination_correct": 8,
+        "post_termination_present": 8
+      },
+      "agentic": {
+        "gold_count": 21,
+        "predicted_count": 26,
+        "matched_count": 17,
+        "false_positive_count": 9,
+        "false_negative_count": 4,
+        "precision": 0.6538461538461539,
+        "recall": 0.8095238095238095,
+        "type_correct": 14,
+        "nature_correct": 10,
+        "obligor_correct": 16,
+        "obligee_correct": 13,
+        "required_detail_correct": 6,
+        "required_detail_total": 32,
+        "post_termination_correct": 2,
+        "post_termination_present": 2
+      },
+      "agentic_false_negative_review": {
+        "atomicity_or_one_to_one_gold_ids": [],
+        "true_unrepresented_gold_ids": [
+          "O001",
+          "O002",
+          "O006",
+          "O007"
+        ],
+        "quote_supported_gold_atoms": 17
+      },
+      "agentic_unmatched_breakdown": {
+        "genuine_unsupported_right_option_or_factual_over_extraction": 9
+      },
+      "comparison": "Agentic rises from 8 to 17 matches, correctly expanding termination, no-contest, and four communication/acknowledgment atoms. It truly misses four duties, including lead forwarding and noncompetition that Standard captured, and adds nine rights, grants, formalities, or factual representations. Two communication pairings are swapped by the matcher."
+    }
+  ],
+  "representative_examples": [
+    {
+      "doc_id": "galacticommtechnologiesinc-11-07-1997-ex-10-46-w-288e261b",
+      "title": "Tiered access fees and schema completeness",
+      "source_quote": "Horst Entertainment agrees to pay Galactcomm $0.01 (one cent) per access up to 400,000 accesses thereafter payment shall be $0.005 (one-half cent) per access. Horst Entertainment shall send this amount to Galacticomm by no later than Wednesday for accesses used from the previuos week (Monday thru Sunday).",
+      "gold_expectation": "Three atoms: first tier, post-threshold tier, and weekly remittance.",
+      "standard_behavior": "One record merges all three and matches only remittance; IsPostTermination is explicitly false.",
+      "agentic_behavior": "Separates remittance but still merges the two price tiers; all four matched Galacticomm outputs omit IsPostTermination.",
+      "diagnosis": "Agentic helps decomposition but does not satisfy fully atomic pricing output, and the omitted boolean illustrates the run-wide 5.6% post-termination field coverage."
+    },
+    {
+      "doc_id": "watchitmediainc-20061201-8-k-ex-10-1-4148672-ex--ba668c47",
+      "title": "Reciprocal pre-publicity discussion",
+      "source_quote": "Both parties agree to discuss use of information gathered form this arrangement before using it in any kind of promotional or public message.",
+      "gold_expectation": "One conditional duty for each party.",
+      "standard_behavior": "One both-parties record with empty role IDs; one side unmatched.",
+      "agentic_behavior": "Two role-resolved records; both gold atoms match.",
+      "diagnosis": "Clear Agentic recall/role-resolution win, offset by three unrelated rights false positives."
+    },
+    {
+      "doc_id": "pacificsystemscontroltechnologyinc-08-24-2000-ex-4c46375e",
+      "title": "Reciprocal mediation",
+      "source_quote": "In the event of a dispute, the parties shall seek mediation at a third country mutually agreed upon.",
+      "gold_expectation": "One mediation duty for ACM and one for SLD.",
+      "standard_behavior": "No mediation output.",
+      "agentic_behavior": "One generic parties-level mediation output matches SLD O006 and leaves ACM O005 unmatched.",
+      "diagnosis": "Agentic finds the clause but still under-splits reciprocal parties."
+    },
+    {
+      "doc_id": "primeenergyresourcescorp-04-02-2007-ex-10-28-com-762f17ca",
+      "title": "Liquidity adjustment detail",
+      "source_quote": "This required liquidity\"  win reduce dollar-for-dollar with any additional shareholder advance s and increase dollar-for-dollar to a maximum of $21,000,000 with any  repayment of shareholder advances.",
+      "gold_expectation": "A required amount/adjustment detail within gold O003.",
+      "standard_behavior": "O003 is found but the adjustment formula is omitted.",
+      "agentic_behavior": "Emits a separate adjustment record, which is deterministically unmatched as alternate atomization.",
+      "diagnosis": "Agentic recovers useful detail at the cost of an extra record; its evidence adds only a trailing quotation mark."
+    },
+    {
+      "doc_id": "versotechnologiesinc-12-28-2007-ex-99-3-intellec-9630dd45",
+      "title": "Further assurance and cost allocation",
+      "source_quote": "Seller will, at Backhaul's cost and expense, do, execute, acknowledge and deliver or cause to be done, executed, acknowledged and delivered, each and all of such further acts, deeds, assignments, transfers, conveyances and assurances as may reasonably be required by Backhaul or Buyer",
+      "gold_expectation": "Seller performance O001 and Backhaul cost-bearing O002.",
+      "standard_behavior": "Captures Seller duty with cost as modifier; O002 unmatched.",
+      "agentic_behavior": "Same result: one Seller duty with cost as modifier; O002 unmatched.",
+      "diagnosis": "No Agentic improvement; reciprocal cost allocation still needs a separate party record."
+    },
+    {
+      "doc_id": "rgcresourcesinc-20151216-8-k-ex-10-3-9372751-ex--f744ccc2",
+      "title": "Base and recurring franchise fees",
+      "source_quote": "For each succeeding calendar year during the term of this Franchise, the total annual Franchise Fee paid by Grantee to the localities shall be the base year total annual Franchise Fee increased by three (3) percent compounded annually over the term of the Franchise.",
+      "gold_expectation": "Separate 2016 base-year O001 and succeeding-year O002 atoms.",
+      "standard_behavior": "Captures only O001; O002 is a true miss.",
+      "agentic_behavior": "One record spans base and future years and matches O002, leaving O001 as an atomicity non-match.",
+      "diagnosis": "Agentic recovers the omitted clause but still fails year-specific atomization."
+    },
+    {
+      "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+      "title": "Manufacturing and delivery responsibility",
+      "source_quote": "All manufacturing and delivery will be the responsibility of BOSCH.",
+      "gold_expectation": "Separate O006 manufacturing and O007 delivery duties.",
+      "standard_behavior": "No prediction.",
+      "agentic_behavior": "One combined record matches O007 and leaves O006 unmatched.",
+      "diagnosis": "Material clause-discovery gain, but multi-action splitting remains incomplete."
+    },
+    {
+      "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+      "title": "Product quality decomposition",
+      "source_quote": "Biomass must contain a minimum of six percent (6%) total Cannabidiol (CBD/and or CBDA) and all Biomass must have less than three percent (3%) total TCH content.",
+      "gold_expectation": "CBD, THC, contaminants, quantity, and sale are details within one gold sale duty O001.",
+      "standard_behavior": "One broad delivery record partially carries quantity/specification context.",
+      "agentic_behavior": "Separate CBD, THC, and contaminant records; the matcher gives O001 to contaminants and counts CBD/THC unmatched.",
+      "diagnosis": "Several unmatched Agentic records are valid alternate atomization, so 47.6% contract precision understates source-supported usefulness."
+    },
+    {
+      "doc_id": "transmontaignepartnersllc-03-13-2020-ex-10-9-ser-8509116d",
+      "title": "Assignment prohibition and exception",
+      "source_quote": "No Party shall have the right to assign its rights or obligations under this Agreement without the consent of the other Parties hereto; provided, however, that either party hereto may make a collateral assignment of this Agreement solely to secure working capital financing for such party.",
+      "gold_expectation": "A prohibition for each party, each carrying the financing exception.",
+      "standard_behavior": "No assignment prediction.",
+      "agentic_behavior": "One generic prohibition record plus one separate permitted-exception/right record; the evaluator matches both O006/O007.",
+      "diagnosis": "Agentic discovers the clause, but O007 is a semantic false match because the matched prediction describes only the right/exception, not the prohibition."
+    },
+    {
+      "doc_id": "precheckhealthservicesinc-20200320-8-k-ex-99-2-1-4594891a",
+      "title": "Communication form and acknowledgment",
+      "source_quote": "Official communication from Distributor or the Principal shall be in written form or by email, acknowledged by the recipient.",
+      "gold_expectation": "Four atoms: each sender form/channel duty and each recipient acknowledgment duty.",
+      "standard_behavior": "No communication predictions.",
+      "agentic_behavior": "Four role-resolved predictions cover all atoms, but greedy quote ties swap the Principal-send and Principal-acknowledge gold pairings.",
+      "diagnosis": "Strong practical Agentic gain; pair-level evaluator output is unreliable when all atoms share one quote."
+    }
+  ],
+  "gold_concerns": {
+    "high_confidence_valid_obligations_omitted": 0,
+    "items": [],
+    "conclusion": "No high-confidence missing gold duty was found among the 57 Agentic unmatched predictions. The gold should not be changed from this review.",
+    "rationale": [
+      "All 107 gold quotes and all source hashes were previously verified.",
+      "The reviewed adjudication notes explicitly exclude passive fee/formality/pricing clauses without a clear performing party, termination and amendment options, present grants/conveyances, legal effects, and factual representations.",
+      "Eight Agentic extras are useful alternate atomization of existing gold, not missing gold obligations.",
+      "Gridiron notice addresses are useful destination details but not separate operative atoms; Agentic evidence contains only address lines.",
+      "Xlite limitations embedded in reserved-right language are arguable covenants, but actor/action semantics are not clear enough for a high-confidence gold addition."
+    ],
+    "borderline_review_notes": [
+      {
+        "doc_id": "xlitechnologies-inc-12-02-2015-ex-10-02-strategi-a37346f8",
+        "quote": "BOSCH reserves the right to share rights given unless it disrupts and/or interferes with CLIENTS business and/or productivity.",
+        "assessment": "Could be read as a limitation on BOSCH, but it is framed as a reserved right with an ambiguous condition rather than a clear performance duty; retain as non-gold unless annotation policy changes."
+      },
+      {
+        "doc_id": "gridironbionutrients-inc-02-05-2020-ex-10-3-supp-b90c3016",
+        "quote": "Shi Farms:214 39t h Lane Pueblo, CO 81006 ... Gridiron: 1119 West 1st Ave - Suite G Spokane, WA 99021",
+        "assessment": "Valid notice-address detail in context, but not a separate obligation and not supported by an operative quote standing alone."
+      }
+    ]
+  },
+  "recommendation": {
+    "demo": "Use the paired run only as a candid recall-versus-cost demo. Lead with Agentic's reduction from 33 to 5 true misses and examples like Watchit/PreCheck, while showing the 41 genuine extra non-obligations, matcher artifacts, and 31x token cost. Do not present Agentic as an across-the-board winner.",
+    "production": "Do not use either raw mode as the production obligation register. Standard can seed a reviewed queue; Agentic can be evaluated as an optional recall escalation, but this run does not validate a production cascade or acceptable unit economics.",
+    "schema_changes_to_test": [
+      {
+        "change": "Require IsPostTermination to be emitted as an explicit boolean on every obligation and add field-coverage validation before accepting a run.",
+        "targets": "Agentic omits the field on 68/72 matched outputs; corrected accuracy and coverage are 5.6%.",
+        "status": "Proposed, unrun."
+      },
+      {
+        "change": "Add explicit ontology exclusions for rights/options, present grants and conveyances, recitals/facts, representations/acknowledgements, legal consequences, jurisdiction/termination powers, and passive amendment formalities.",
+        "targets": "41 genuine Agentic unmatched non-obligations.",
+        "status": "Proposed, unrun."
+      },
+      {
+        "change": "Require exactly one explicit obligor and one atomic action per obligation; expand each/both/no-party clauses into party-specific records and split coordinated verbs such as defend/indemnify/hold harmless.",
+        "targets": "20 Agentic atomicity non-matches.",
+        "status": "Proposed, unrun."
+      },
+      {
+        "change": "Require minimal verbatim evidence for the duty, prohibit evidence-only preambles/addresses, deduplicate Evidence entries, and fail validation when obligor or operative quote is missing.",
+        "targets": "26 repeated evidence entries, 3 quote/evaluator artifacts, and generic-party outputs.",
+        "status": "Proposed, unrun."
+      },
+      {
+        "change": "Clarify that conditions, amounts, timing, exceptions, and adjustment formulas belong on the parent obligation unless they independently assign performance to another party.",
+        "targets": "Prime, Gridiron, and TransMontaigne fragmentation.",
+        "status": "Proposed, unrun."
+      }
+    ],
+    "evaluation_changes_to_test": [
+      "Use maximum-weight assignment with semantic/party tie-breaking instead of greedy ordering.",
+      "Add clause-group identifiers and report many-to-one clause coverage beside atomic one-to-one scoring.",
+      "Add semantic duplicate/fragment clustering and repeated-evidence metrics.",
+      "Normalize harmless terminal quote punctuation for groundedness.",
+      "Add a fully-correct-atom metric gated on party, nature, type, and required details."
+    ],
+    "workflow_experiments_to_run": [
+      "Test Standard-first extraction followed by Agentic only on low-confidence, reciprocal, or uncovered clauses; compare union recall, review burden, latency, and tokens.",
+      "Run the revised schema on this fixed gold without changing gold, then on a larger contract mix.",
+      "Run N×1 stability tests before making reliability claims."
+    ],
+    "decision": "Agentic materially helps recall, but the evidence—including 5.6% IsPostTermination coverage—does not support production adoption or a claim of material balanced-quality advantage yet."
+  }
+}

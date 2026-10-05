@@ -1,346 +1,154 @@
 ---
-status: ✅ IMPLEMENTED
-version: 2.0.0
-last_updated: 2026-01-30
+name: eval-cu
+description: Evaluates CU analyzers with official cu batches or cost-approved parallel experiments, then offline export, reviewed correctness, stability, and cost reporting.
 ---
 
 # Skill: Eval CU
 
-Evaluate your Content Understanding analyzer against baselines with systematic evals.
+Evaluate quality against reviewed truth, not merely whether analysis succeeds.
+Use [Iterate Analyzer Schema](iterate-analyzer-schema.skill.md) for shared
+planning/promotion and [iteration workspaces](../../docs/iteration-workspaces.md)
+for manifests, bug links, metric definitions, and STP requirements.
 
-## Purpose
+## 1. Declare scope before execution
 
-**Evals are the contract** — they define what good looks like for your extraction pipeline. This skill helps you:
-- Run systematic evaluations on representative document sets
-- Compare results against baselines to detect regressions
-- Generate evidence bundles (metrics, diffs, exemplars) for accept/reject decisions
-- Enable the *generate → eval → improve* feedback loop
+Choose the case and next unused `iterations\NNN`; customer material stays
+private. Freeze/hash inputs and every analyzer schema. Record hypothesis,
+baseline, expected/actual defects, verified bugs, truth/evaluator versions,
+acceptance rules, development/holdout split, budget, and stopping conditions.
 
-## Why Evals Matter
+| Eval | Purpose | Execution |
+|---|---|---|
+| Scale (1×N) | Coverage and reviewed accuracy across varied inputs | Native file/folder batch |
+| Stability (N×1) | Value, row, and segment consistency | Explicit-file experiment with repeats |
+| Comparison | Baseline/candidate on identical inputs | Predeclared multi-analyzer experiment |
 
-Coding agents (and humans) get reliable by **checking their work** against well-defined evals, then applying targeted fixes, and checking again. Without evals there's no baseline, no regression guardrails, and no way to know if changes helped.
+New configurations/scopes need a new numbered experiment. Trials within the
+planned matrix stay inside it. Obtain explicit cost approval for the complete
+input × analyzer × trial scope before running analysis.
 
-## Eval Types
+## 2. Execute with official `cu`
 
-### Scale Eval (1×N)
-- Run **many documents** once each
-- Purpose: Measure coverage, field-level accuracy, and fill rates across document variety
-- Use when: Validating schema before production, establishing baselines
+### Ordinary folder evaluation
 
-### Stability Eval (N×1)  
-- Run **one document** (or few) multiple times
-- Purpose: Measure extraction consistency and detect randomness/drift
-- Use when: Debugging inconsistent results, tuning confidence thresholds
+Run from the repository root after configuring the official CLI as described
+in [README](../../README.md). Replace placeholders; the source folder must
+contain only staged input files matching the frozen inventory. Keep manifests,
+schemas, and outputs outside the source. The verified beta CLI's discovery
+filters can miss files; use input-only staging or explicit file selectors.
 
----
-
-## Workflow Steps
-
-### Step 1: Configure Eval
-
-Gather required information:
-
-| Parameter | Scale Eval (1×N) | Stability Eval (N×1) |
-|-----------|------------------|----------------------|
-| Analyzer ID | Required | Required |
-| Input documents | Folder with 20-100+ docs | 1-3 specific documents |
-| Iterations | 1 (default) | 10 (recommended) |
-| Output folder | Required | Required |
-| API version | Explicit when preview | Explicit when preview |
-
-**Example prompts**:
-
-For scale eval:
-```
-I'll run a scale eval on your analyzer.
-
-Analyzer ID: invoice-v1
-Documents: Issues/Acme/test_docs/ (47 files found)
-Iterations: 1
-
-This will process 47 documents to measure coverage. Proceed?
+```powershell
+cu analyze --source "{documents_folder}" `
+  --analyzer invoice_001 --json --api-version 2025-11-01 `
+  --concurrency 5 --yes --on-existing error `
+  --output-dir "{iteration_folder}\outputs\raw\analysis" `
+  --report-file "{iteration_folder}\outputs\raw\analysis-status.json"
 ```
 
-For stability eval:
-```
-I'll run a stability eval on your analyzer.
+Add `--recursive` only for the intended inventoried subfolders. For one file,
+replace `--source ...` with `--file "{document_path}"`; repeat `--file` for
+multiple explicit files without directory discovery. Native concurrency
+is 1–32. Use `--profile NAME` when required and the analyzer's exact API
+version; [preview compatibility](cu-preview-api.skill.md) comes before
+Agentic corpus runs.
 
-Analyzer ID: invoice-v1
-Document: Issues/Acme/samples/invoice_001.pdf
-Iterations: 10
+### Ten parallel repeats
 
-This will run the same document 10 times to measure consistency. Proceed?
-```
-
-### Step 2: Run Analysis
-
-**Tool**: `tools/cu-analyzer-run/run.py`
-
-**Scale eval command**:
-```bash
-python tools/cu-analyzer-run/run.py \
-  --analyzer-id {analyzer_id} \
-  --input {documents_folder} \
-  --output {output_folder}
+```powershell
+python tools\cu-experiments\experiment.py plan `
+  --input "{document_path}" --analyzer invoice_001 `
+  --iterations 10 --concurrency 10 --api-version 2025-11-01 `
+  --output "{iteration_folder}\outputs\raw\experiment"
 ```
 
-When the analyzer uses a preview-only contract, append the exact
-`--api-version` used to create it. For agentic preview runs, follow
-`cu-preview-api.skill.md`: one file per request, short smoke test first, and
-explicit cost confirmation before scale or repeated runs.
+Planning is offline. Review the matrix, staged input hashes, API/profile, and
+cost. Only after explicit approval:
 
-For a Standard-vs-Agentic comparison, keep the input documents and
-`fieldSchema` identical, run Standard first, clean up its analyzer, and then run
-Agentic. Score failed documents fail-closed rather than reporting only
-survivors. 
-
-**Stability eval command**:
-```bash
-python tools/cu-analyzer-run/run.py \
-  --analyzer-id {analyzer_id} \
-  --input {document_path} \
-  --iterations 10 \
-  --output {output_folder}
+```powershell
+python tools\cu-experiments\experiment.py run `
+  "{iteration_folder}\outputs\raw\experiment" --confirm-cost
 ```
 
-**Output**:
-- `metadata.json` - Run configuration and summary
-- `results/{document}.json` - Result for each document/iteration
+For five parallel repeats set both counts to 5 when planning. Repeat
+`--input FILE` or `--analyzer ID` to expand the fixed matrix. Concurrency is
+global across native CLI processes. The helper does not create/delete
+analyzers or implement CU submission/polling; native `cu` executes each
+analyzer's staged-file batch. Select an alternate official executable with
+`run --cu-executable PATH` if needed. Reruns require new paths and renewed
+cost review; no automatic resume/rebilling.
 
-### Step 3: Export Results
+## 3. Preserve and inspect actual outputs
 
-**Tool**: `tools/cu-results-export/export.py`
+- Native JSON can contain SDK-shaped contents or an LRO envelope with
+  `result.contents`; inspect the actual payload. Native results are
+  `.result.json`, possibly under source-relative subdirectories.
+- For repeated work, `experiment.json` (`cu-experiments/v1`) is the immutable
+  plan/jobs record. Separate `run.json` (`cu-experiments/run/v1`) records
+  execution state/outcomes; execution never overwrites the plan.
+- Frozen trial files are
+  `inputs\trial-NNNN\input-NNNN\file`. Per-analyzer results are
+  `batches\analyzer-NNNN\results\trial-NNNN\input-NNNN\file.result.json`.
+  Each analyzer batch also retains `native-report.json`, `stdout.txt`, and
+  `stderr.txt` alongside `results`. Preserve these with plan hashes and
+  identity mappings; keep completed execution evidence unchanged.
+- Reconcile all intended inputs/trials, exit statuses, and failures before
+  scoring. A report is execution evidence, not extracted data or accuracy.
+- `--usage` and `--time` print separate console telemetry; they do not
+  guarantee persisted per-file usage or latency. Missing values remain
+  unknown/null. Do not scrape console text as a stable schema or divide total
+  elapsed time to invent per-input latency.
 
-**Command**:
-```bash
-python tools/cu-results-export/export.py \
-  --input {output_folder} \
-  --output {output_folder}/results.csv
+## 4. Export and score offline
+
+Set `{raw_folder}` to this experiment's native analysis or experiment output:
+
+```powershell
+python tools\cu-results-export\export.py `
+  --input "{raw_folder}" `
+  --output "{iteration_folder}\outputs\evaluation\results.csv" --diagnose
+python tools\cu-cost-estimator\generate_cost_summary.py `
+  "{raw_folder}" --json `
+  --output "{iteration_folder}\outputs\evaluation\cost-summary.json"
 ```
 
-**Output**:
-- `results.csv` or `results.xlsx` - Wide table with extracted values
-- `results.summary.json` - Fill rates and statistics
-
-### Step 3.5: Estimate Costs (Optional)
-
-**Tool**: `tools/cu-cost-estimator/`
-
-Use cost estimation to project production costs based on test results:
-
-**From test results (usage-based - most accurate)**:
-```bash
-python tools/cu-cost-estimator/generate_cost_summary.py \
-  --input {output_folder} \
-  --output {output_folder}/cost_report.md
-```
-
-**Quick estimate for planning**:
-```bash
-python tools/cu-cost-estimator/cu_cost_estimator.py estimate \
-  --file-type document \
-  --quantity 1000 \
-  --model gpt-4.1
-```
-
-**Output**:
-- Cost breakdown by component (content extraction, tokens, model usage)
-- Per-document and total cost estimates
-- Comparison across deployment types (global vs data zone)
-
-### Step 4: Generate Report
-
-Create a markdown summary report at `{output_folder}/REPORT.md`:
-
-**Report template**:
-```markdown
-# Eval Report: {analyzer_id}
-
-**Run ID**: {run_id}  
-**Eval Type**: {scale|stability}  
-**Date**: {timestamp}
-
-## Summary
-
-| Metric | Value |
-|--------|-------|
-| Documents Processed | {count} |
-| Successful | {success_count} |
-| Failed | {fail_count} |
-| Total Iterations | {total_iterations} |
-
-## Fill Rates (Coverage)
-
-| Field | Fill Rate | Confidence (p50) | Notes |
-|-------|-----------|------------------|-------|
-| {field1} | {rate}% | {conf} | {notes} |
-| ... | ... | ... | ... |
-
-## Issues Found
-
-{list of issues observed}
-
-## Recommendations
-
-{recommendations for schema improvements}
-
-## Files
-
-- Raw results: `results/`
-- Export: `results.csv`
-- Metadata: `metadata.json`
-```
-
-### Step 5: Review and Recommend
-
-For **scale evals**, analyze:
-- Fields with low fill rates (< 80%) — indicates coverage gaps
-- Patterns in failed extractions — may need description improvements
-- Edge cases that need handling — document variations
-
-For **stability evals**, analyze:
-- Fields that vary between iterations — extraction inconsistency
-- Confidence score variance — may need threshold tuning
-- Potential non-determinism issues — description ambiguity
-
----
-
-## Example: Scale Eval Session
-
-```
-User: Run a scale eval on my invoice-v1 analyzer with the documents in Issues/Acme/invoices/
-
-Copilot: I'll run a scale eval on your invoice-v1 analyzer.
-
-Configuration:
-- Analyzer: invoice-v1
-- Documents: Issues/Acme/invoices/ (52 PDF files)
-- Eval type: Scale (1×N)
-- Output: Issues/Acme/test_results/scale_20260126/
-
-Running analysis...
-
-[Progress: 52/52 documents processed]
-
-Results:
-✓ 50 successful
-✗ 2 failed (error reading document)
-
-Exporting to CSV...
-
-## Eval Report
-
-| Field | Fill Rate | Confidence (p50) |
-|-------|-----------|------------------|
-| InvoiceNumber | 100% | 0.95 |
-| InvoiceDate | 96% | 0.92 |
-| VendorName | 88% | 0.87 |
-| TotalAmount | 100% | 0.98 |
-| LineItems | 94% | 0.89 |
-
-### Issues Found
-
-1. **VendorName (88%)**: 6 documents missing vendor name
-   - 4 had vendor info in different location (footer vs header)
-   - 2 had vendor name as logo only (no text)
-
-2. **InvoiceDate (96%)**: 2 documents with date in non-standard format
-
-### Recommendations
-
-1. Update VendorName description to check both header and footer
-2. Add examples of date formats to InvoiceDate field
-3. Consider adding VendorLogo field for logo-based identification
-
-Full report: Issues/Acme/test_results/scale_20260126/REPORT.md
-```
-
----
-
-## Example: Stability Eval Session
-
-```
-User: Check the stability of invoice-v1 on invoice_007.pdf
-
-Copilot: I'll run a stability eval (10 iterations) on invoice_007.pdf.
-
-Configuration:
-- Analyzer: invoice-v1  
-- Document: Issues/Acme/samples/invoice_007.pdf
-- Iterations: 10
-- Output: Issues/Acme/test_results/stability_20260126/
-
-Running 10 iterations...
-
-## Stability Eval Results
-
-| Field | Consistent? | Unique Values | Confidence Variance |
-|-------|-------------|---------------|---------------------|
-| InvoiceNumber | ✓ Yes | 1 | 0.01 |
-| InvoiceDate | ✓ Yes | 1 | 0.02 |
-| VendorName | ✗ No | 2 variants | 0.08 |
-| TotalAmount | ✓ Yes | 1 | 0.00 |
-
-### Inconsistency Found
-
-**VendorName** showed 2 different values across 10 runs:
-- "Acme Corporation" (7 times)
-- "ACME CORPORATION" (3 times)
-
-This appears to be a casing inconsistency. The field description should 
-specify the expected casing format.
-
-### Recommendation
-
-Update VendorName description to specify: "Extract vendor name with 
-original casing as it appears in the document."
-```
-
----
-
-## Output Artifacts
-
-```
-{output_folder}/
-├── metadata.json           # Run configuration
-├── results/
-│   ├── doc1.json          # Individual results
-│   ├── doc1_iter002.json  # (stability eval iterations)
-│   └── ...
-├── results.csv            # Exported table
-├── results.summary.json   # Statistics
-└── REPORT.md              # Summary report
-```
-
----
-
-## KPIs to Track
-
-When evaluating, consider these metrics per field:
-
-| Metric | Description | Target |
-|--------|-------------|--------|
-| Fill Rate | % of documents where field is populated | >80% |
-| Confidence (p50) | Median confidence score | >0.85 |
-| Stability Rate | % of iterations with consistent value (N×1) | >95% |
-| Accuracy/F1 | Match against ground truth labels | Varies |
-| Latency (p95) | Processing time per document | <5s |
-| Cost per doc | Token usage and API costs | Budget-dependent |
-
----
-
-## Related Tools
-
-- `cu-analyzer-run` - Execute analysis
-- `cu-results-export` - Export to CSV/Excel
-- `cu-cost-estimator` - Estimate processing costs
-
-## Related Skills
-
-- `generate-analyzer.skill.md` - Create new analyzer (often done before evaluating)
-- `cu-preview-api.skill.md` - Preview API compatibility, test resource, and cost gate
-
-## Related Prompts
-
-- `evaluate-analyzer.prompt.md` - Quick eval reference and report template
-- `write_schema_fields.prompt.md` - Improve field descriptions based on eval results
+The offline tools accept native recursive results and legacy saved evidence,
+excluding CLI status reports from analysis data. Missing usage is unknown,
+not zero. Retaining old saved results does not require another service backend.
+
+Use the case's versioned evaluator for reviewed field and case correctness,
+array/segment retention, stability, false accepts, and human-review rates.
+Count failed/missing planned outputs fail-closed; do not evaluate only
+survivors. Compare matched inputs and all protected fields.
+
+Cost is required per iteration: status, amount/null, USD, evidence basis,
+price source/date, scope, and exclusions. Usage × price is estimated, not
+measured charges. Include layout, failed/retried/repeated calls, and billable
+evaluation or disclose missing coverage. Do not silently apply defaults to
+unsupported models or infer usage from successful output.
+
+## 5. Report the decision
+
+Create `{iteration_folder}\report.md`, update its manifest, and synchronize
+the root index. Link actual artifacts, not planned filenames.
+
+Required sections:
+
+1. Hypothesis, baseline, expected/actual defects, exact changes, and bugs.
+2. Frozen scope, schema/input hashes, truth/evaluator, acceptance/holdout policy.
+3. Actual sanitized commands, CLI/tool/API/model/profile versions and observed
+   IDs; input/trial success, failure, retry, and exclusion counts.
+4. Reviewed correctness and case acceptance with units, denominators,
+   calculation rules, and raw/evaluator sources.
+5. Diagnostic fill/confidence and stability, separate from correctness.
+6. Observable latency/usage, cost status/basis, evidence gaps, and limitations.
+7. Accept/reject/inconclusive decision and protected-behavior regression checks.
+
+Fill >80% or confidence >0.85 may be workload-specific diagnostic targets,
+not production gates. STP requires reviewed correct automatic completion
+over all eligible cases, false-accept auditing, review/failure rates, and
+representative holdout evidence. Without these, label STP unverified.
+
+Use [video evaluation](../prompts/evaluate-analyzer-video.prompt.md) for
+timestamp/detection metrics and
+[routing](generate-analyzer-classify-route.skill.md) for packet boundaries
+and per-category correctness.

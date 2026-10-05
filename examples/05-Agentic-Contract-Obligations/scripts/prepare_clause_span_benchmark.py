@@ -147,7 +147,7 @@ def main() -> None:
     parser.add_argument(
         "--source-dir",
         type=Path,
-        default=PROJECT_DIR / "test_results" / "heldout-inputs",
+        default=PROJECT_DIR / "samples" / "downloaded",
     )
     parser.add_argument(
         "--output-dir",

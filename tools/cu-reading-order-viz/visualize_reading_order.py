@@ -15,8 +15,8 @@ Usage:
     # Specific pages only
     python visualize_reading_order.py --pdf doc.pdf --layout doc.layout.json --output out/ --pages 1-3,5
 
-    # Compare two layout sources (e.g., prod vs selfhost)
-    python visualize_reading_order.py --pdf doc.pdf --layout-a prod.json --layout-b selfhost.json --output out/
+    # Compare CU and Document Intelligence layout results
+    python visualize_reading_order.py --pdf doc.pdf --layout-a cu.json --layout-b di.json --output out/
 """
 
 import argparse
@@ -88,42 +88,39 @@ def parse_source_polygon(source_str):
 
 
 def extract_paragraphs_cu(json_path):
-    """Extract paragraphs from CU layout JSON (prod format)."""
+    """Extract paragraphs from CU layout JSON."""
     with open(json_path, encoding="utf-8") as f:
         data = json.load(f)
 
-    # CU format: result.contents[0].paragraphs with source field
-    content_obj = data.get("result", {}).get("contents", [{}])[0]
-
+    result = data.get("result", data) if isinstance(data, dict) else {}
+    contents = result.get("contents") if isinstance(result, dict) else None
+    if not isinstance(contents, list) or any(not isinstance(item, dict) for item in contents):
+        raise ValueError(f"Invalid CU contents in {json_path}")
     pages_info = {}
-    for p in content_obj.get("pages", []):
-        pages_info[p["pageNumber"]] = {
-            "width": p.get("width", 8.5),
-            "height": p.get("height", 11)
-        }
-
     paragraphs_by_page = {}
-    for idx, para in enumerate(content_obj.get("paragraphs", [])):
-        role = para.get("role", "")
-        content_text = para.get("content", "")
-        source = para.get("source", "")
-        page, polygon = parse_source_polygon(source)
-        if page is None:
-            continue
-        if page not in paragraphs_by_page:
-            paragraphs_by_page[page] = []
-        paragraphs_by_page[page].append({
-            "idx": idx,
-            "role": role,
-            "content": content_text[:80],
-            "polygon": polygon,
-        })
+    idx = 0
+    for content_obj in contents:
+        for p in content_obj.get("pages", []):
+            pages_info[p["pageNumber"]] = {
+                "width": p.get("width", 8.5),
+                "height": p.get("height", 11)
+            }
+        for para in content_obj.get("paragraphs", []):
+            page, polygon = parse_source_polygon(para.get("source", ""))
+            if page is not None:
+                paragraphs_by_page.setdefault(page, []).append({
+                    "idx": idx,
+                    "role": para.get("role", ""),
+                    "content": para.get("content", "")[:80],
+                    "polygon": polygon,
+                })
+            idx += 1
 
     return pages_info, paragraphs_by_page
 
 
 def extract_paragraphs_di(json_path):
-    """Extract paragraphs from Document Intelligence (selfhost) JSON."""
+    """Extract paragraphs from Document Intelligence JSON."""
     with open(json_path, encoding="utf-8") as f:
         data = json.load(f)
 
@@ -152,10 +149,13 @@ def extract_paragraphs_di(json_path):
 
 
 def detect_format(json_path):
-    """Auto-detect whether JSON is CU (prod) or DI (selfhost) format."""
+    """Auto-detect whether JSON is CU or Document Intelligence format."""
     with open(json_path, encoding="utf-8") as f:
         data = json.load(f)
-    if "result" in data and "contents" in data.get("result", {}):
+    if not isinstance(data, dict):
+        return "unknown"
+    result = data.get("result", data)
+    if isinstance(result, dict) and "contents" in result:
         return "cu"
     elif "analyzeResult" in data:
         return "di"
@@ -171,8 +171,7 @@ def extract_paragraphs(json_path):
     elif fmt == "di":
         return extract_paragraphs_di(json_path)
     else:
-        print(f"  ⚠️ Unknown JSON format: {json_path}")
-        return {}, {}
+        raise ValueError(f"Unknown layout JSON format: {json_path}")
 
 
 # ─── Drawing ─────────────────────────────────────────────────────────────────
@@ -390,7 +389,7 @@ def process_batch(input_dir, layout_dir, output_dir, pages_filter=None):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    pdfs = sorted(input_dir.glob("*.pdf"))
+    pdfs = sorted(input_dir.rglob("*.pdf"))
     if not pdfs:
         print(f"No PDFs found in {input_dir}")
         return
@@ -400,23 +399,25 @@ def process_batch(input_dir, layout_dir, output_dir, pages_filter=None):
     processed = 0
     for pdf_path in pdfs:
         stem = pdf_path.stem
-        # Try common naming patterns
+        relative = pdf_path.relative_to(input_dir)
+        result_dir = layout_dir / relative.parent
         json_candidates = [
-            layout_dir / f"{stem}.layout.json",
-            layout_dir / f"{stem}.json",
+            result_dir / f"{pdf_path.name}.result.json",
+            result_dir / f"{stem}.layout.json",
+            result_dir / f"{stem}.json",
         ]
-        json_path = None
-        for candidate in json_candidates:
-            if candidate.exists():
-                json_path = candidate
-                break
+        matches = [candidate for candidate in json_candidates if candidate.is_file()]
+        if len(matches) > 1:
+            raise ValueError(f"Ambiguous layout results for {relative}; use --layout explicitly")
+        json_path = matches[0] if matches else None
 
         if not json_path:
             print(f"⚠️  No layout JSON found for {pdf_path.name}, skipping")
             continue
 
         print(f"[{stem}] Visualizing reading order...")
-        output_path = output_dir / f"{stem}_reading_order.pdf"
+        output_path = output_dir / relative.parent / f"{stem}_reading_order.pdf"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         create_visualization_pdf(
             pdf_path, json_path, output_path,
             pages_filter=pages_filter, label_prefix=f"{stem} | "
@@ -457,7 +458,7 @@ Examples:
   python visualize_reading_order.py --input-dir samples/ --layout-dir layout_results/ -o output/
 
   # Compare two layout sources
-  python visualize_reading_order.py --pdf doc.pdf --layout-a prod.json --layout-b selfhost.json -o output/
+  python visualize_reading_order.py --pdf doc.pdf --layout-a cu.json --layout-b di.json -o output/
 
   # Specific pages only
   python visualize_reading_order.py --pdf doc.pdf --layout doc.json -o output/ --pages 1-3,18
@@ -529,4 +530,7 @@ Examples:
 
 
 if __name__ == "__main__":
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     main()

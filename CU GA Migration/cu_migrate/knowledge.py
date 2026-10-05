@@ -6,6 +6,7 @@ reuses existing blob storage locations, and preserves field mappings.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from cu_migrate.models import (
@@ -23,10 +24,10 @@ def migrate_knowledge_sources(
     Returns (knowledge_sources_list, findings).
     """
     findings: list[MigrationFinding] = []
-    knowledge_sources: list[dict[str, Any]] = []
+    knowledge_sources: list[dict[str, Any]] = deepcopy(source.definition.get("knowledgeSources", []))
 
     td = source.training_data
-    if not td:
+    if td is None or td == []:
         return knowledge_sources, findings
 
     # Training data may be a single dict or a list
@@ -34,13 +35,23 @@ def migrate_knowledge_sources(
 
     for idx, ds in enumerate(datasets):
         ks: dict[str, Any] = {}
+        blob_source = ds.get("azureBlobSource", {})
+        if not isinstance(blob_source, dict):
+            findings.append(MigrationFinding(
+                severity=FindingSeverity.NOT_SUPPORTED,
+                category="knowledge_source",
+                message=f"Dataset {idx} azureBlobSource must be an object",
+                analyzer_id=source.analyzer_id,
+                recommended_action="Correct the local trainingData export before replanning",
+            ))
+            continue
 
         # Reuse blob storage location
-        blob_url = ds.get("blobContainerUrl") or ds.get("storageUrl") or ds.get("azureBlobSource", {}).get("containerUrl")
+        blob_url = ds.get("blobContainerUrl") or ds.get("storageUrl") or blob_source.get("containerUrl")
         if blob_url:
             ks["kind"] = "azureBlob"
             ks["azureBlobSource"] = {"containerUrl": blob_url}
-            prefix = ds.get("prefix") or ds.get("azureBlobSource", {}).get("prefix")
+            prefix = ds.get("prefix") or blob_source.get("prefix")
             if prefix:
                 ks["azureBlobSource"]["prefix"] = prefix
             findings.append(MigrationFinding(
@@ -52,7 +63,7 @@ def migrate_knowledge_sources(
             ))
         else:
             findings.append(MigrationFinding(
-                severity=FindingSeverity.NEEDS_REVIEW,
+                severity=FindingSeverity.NOT_SUPPORTED,
                 category="knowledge_source",
                 message=f"Dataset {idx} has no recognizable blob URL — manual mapping needed",
                 analyzer_id=source.analyzer_id,
@@ -63,14 +74,15 @@ def migrate_knowledge_sources(
         # Preserve field mappings
         field_mappings = ds.get("fieldMappings") or ds.get("fields")
         if field_mappings:
-            ks["fieldMappings"] = field_mappings
-            findings.append(MigrationFinding(
-                severity=FindingSeverity.AUTO_FIXED,
-                category="knowledge_source_fields",
-                message=f"Preserved {len(field_mappings)} field mapping(s) for dataset {idx}",
-                analyzer_id=source.analyzer_id,
-                auto_fix_applied=True,
-            ))
+            ks["fieldMappings"] = deepcopy(field_mappings)
+            if isinstance(field_mappings, (list, dict)):
+                findings.append(MigrationFinding(
+                    severity=FindingSeverity.AUTO_FIXED,
+                    category="knowledge_source_fields",
+                    message=f"Preserved {len(field_mappings)} field mapping(s) for dataset {idx}",
+                    analyzer_id=source.analyzer_id,
+                    auto_fix_applied=True,
+                ))
         else:
             findings.append(MigrationFinding(
                 severity=FindingSeverity.NEEDS_REVIEW,
@@ -82,11 +94,12 @@ def migrate_knowledge_sources(
 
         knowledge_sources.append(ks)
 
-    if knowledge_sources:
+    converted = len(knowledge_sources) - len(source.definition.get("knowledgeSources", []))
+    if converted:
         findings.append(MigrationFinding(
             severity=FindingSeverity.AUTO_FIXED,
             category="knowledge_source",
-            message=f"Converted {len(knowledge_sources)} trainingData entry(ies) → knowledgeSources",
+            message=f"Converted {converted} trainingData entry(ies) → knowledgeSources",
             analyzer_id=source.analyzer_id,
             auto_fix_applied=True,
         ))

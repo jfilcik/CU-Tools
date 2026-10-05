@@ -265,6 +265,7 @@
       <small>Or drag & drop Document/JSON here</small>
     </div>
   </div>
+  <script src="run_files.js"></script>
   <script>
     let pdfDoc = null, jsonData = null, currentPage = 1, viewport = null;
     let currentScale = 1.0; // Track current zoom level
@@ -273,6 +274,7 @@
 
     // --- Test Run State ---
     let runMetadata = null;   // Parsed metadata.json
+    let runBase = "";
     let runFiles = {};        // Map of filename -> File object for all files in the run folder
     let runDocFiles = {};     // Map of document filename -> File object for source docs
     let currentDocIndex = -1; // Index into runMetadata.results
@@ -1107,58 +1109,36 @@
 
     /**
      * Load a test run from a folder selection.
-     * Expects the folder to contain metadata.json, result JSONs, and optionally source docs.
+     * Accepts native CLI results or a legacy run and optionally source documents.
      */
     async function loadTestRun(fileList) {
-      // Index all files by their relative path and base name
-      runFiles = {};
-      runDocFiles = {};
-      let metadataFile = null;
-
-      for (const file of fileList) {
-        const relPath = file.webkitRelativePath || file.name;
-        const baseName = relPath.split('/').pop();
-        runFiles[baseName] = file;
-
-        if (baseName === 'metadata.json') {
-          metadataFile = file;
-        }
-      }
-
-      if (!metadataFile) {
-        alert('No metadata.json found in the selected folder. Please select a test run output folder.');
-        return;
-      }
-
+      let indexed;
       try {
-        runMetadata = JSON.parse(await metadataFile.text());
+        indexed = await cuRunFiles.buildRunIndex(fileList);
       } catch (err) {
-        alert('Failed to parse metadata.json: ' + err.message);
+        alert('Failed to load results: ' + err.message);
         return;
       }
+      runMetadata = indexed.metadata;
+      runFiles = indexed.files;
+      runDocFiles = indexed.documents;
+      runBase = indexed.base;
 
       // Show run info
-      const folderName = (metadataFile.webkitRelativePath || '').split('/').slice(0, -1).pop() || 'test_run';
+      const folderName = (fileList[0]?.webkitRelativePath || '').split('/')[0] || 'results';
       runNameEl.textContent = folderName;
       runAnalyzerIdEl.textContent = runMetadata.analyzer_id || '—';
-      runStatsEl.textContent = `${runMetadata.successful || 0}/${runMetadata.document_count || 0} succeeded, ${runMetadata.iterations || 1} iter`;
+      runStatsEl.textContent = indexed.native
+        ? `${runMetadata.results.length} result files; planned outcomes and cost not verified`
+        : `${runMetadata.successful || 0}/${runMetadata.document_count || 0} succeeded, ${runMetadata.iterations || 1} iter`;
       runInfoEl.style.display = 'block';
-
-      // Try to find source documents in the folder tree
-      // They might be in a sibling "samples" folder if the user selected the parent
-      for (const file of fileList) {
-        const name = file.name.toLowerCase();
-        if (name.endsWith('.pdf') || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.tiff')) {
-          runDocFiles[file.name] = file;
-        }
-      }
 
       // Populate the document dropdown
       populateDocDropdown();
 
       // Auto-navigate to the first document
       if (runMetadata.results && runMetadata.results.length > 0) {
-        navigateToDoc(0);
+        await navigateToDoc(0);
       }
     }
 
@@ -1174,7 +1154,7 @@
         opt.value = idx;
         // Show iteration info if multiple iterations
         const iterLabel = (runMetadata.iterations > 1) ? ` (iter ${result.iteration})` : '';
-        const statusIcon = result.status === 'success' ? '✓' : '✗';
+        const statusIcon = result.status === 'available' ? '?' : result.status === 'success' ? '✓' : '✗';
         opt.textContent = `${statusIcon} ${result.document}${iterLabel}`;
         docSelect.appendChild(opt);
       });
@@ -1198,8 +1178,20 @@
 
       const result = runMetadata.results[idx];
 
+      // Never show the prior document behind a missing/ambiguous new result.
+      pdfDoc = null;
+      isImage = false;
+      jsonData = null;
+      overlay.innerHTML = '';
+      fieldsList.innerHTML = '';
+      canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+      imageContainer.style.display = 'none';
+      canvas.style.display = 'block';
+      pdfName.textContent = '';
+      jsonName.textContent = '';
+
       // Load the result JSON
-      const jsonFile = runFiles[result.result_file];
+      const jsonFile = cuRunFiles.findFile(runFiles, result.result_file, runBase);
       if (jsonFile) {
         await loadJSON(jsonFile);
       } else {
@@ -1207,7 +1199,7 @@
       }
 
       // Load the source document
-      const docFile = runDocFiles[result.document] || runFiles[result.document];
+      const docFile = cuRunFiles.findFile(runDocFiles, result.document, runBase);
       if (docFile) {
         await loadDocument(docFile);
         docMissingHint.style.display = 'none';

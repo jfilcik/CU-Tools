@@ -1,66 +1,74 @@
-# Tutorial 01: API Testing with HTTP Files
+# Tutorial 01: Explore CU with the official CLI
 
-Explore the Azure Content Understanding REST API interactively using VS Code's REST Client extension — no code required.
+Inspect analyzers, extract document layout, and run field extraction without
+maintaining HTTP request files or a second client.
 
-## What You'll Learn
+Follow the [root Quick Start](../../README.md#quick-start) to install the
+official CLI and configure your own authorized CU resource. Run the examples
+from the **CU-Tools repository root**. Profiles and authentication belong to
+the official CLI; there is no tutorial-specific credential file.
 
-- How to call CU REST APIs directly
-- Content extraction (OCR, layout, tables)
-- Domain-specific analyzers (invoice, receipt, tax forms)
-- Custom analyzer creation and field extraction
-- Video analysis
-- Analyzer management (list, copy, delete)
+## Inspect without analyzing documents
 
-## Prerequisites
-
-### 1. Azure Subscription and Resource
-
-The easiest way to get started is to use **[Content Understanding Studio](https://aka.ms/cu-studio)** to set up your subscription and Azure Foundry resource:
-
-- **[Quickstart: Content Understanding Studio](https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/quickstart/content-understanding-studio?tabs=portal)** - Follow this guide to:
-  - Create an Azure subscription (if needed)
-  - Create a Microsoft Foundry resource
-  - Configure default model deployments (GPT-4.1, GPT-4.1-mini, and text-embedding models)
-
-### 2. VS Code REST Client Extension
-
-Install the **[REST Client Extension](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)** — it lets you send HTTP requests directly from `.http` files in VS Code.
-
-### 3. Environment Configuration
-
-Copy the `.env.sample` file to `.env` and update it with your Azure Foundry resource credentials:
-
-```
-API_KEY=your-subscription-key
-ENDPOINT_URL=your-endpoint-url
+```powershell
+cu --version
+cu doctor
+cu analyzer list --json
+cu analyzer show prebuilt-layout
+cu defaults show
 ```
 
-## Getting Started
+These inspect your configured service. To preview file discovery locally
+without a service call or writes:
 
-1. Complete the prerequisites above
-2. Open `CU-API-Testing-Guide.http` in VS Code
-3. Click "Send Request" above any HTTP request to execute it
-4. Follow the **QUICK START** section in the file to:
-   - Check your model deployments
-   - Try content extraction
-   - Test domain-specific analyzers
+```powershell
+cu analyze .\examples\02-Invoice-Extraction\samples\invoice.pdf `
+  --analyzer prebuilt-layout --output-dir .\cli-tutorial\layout --dry-run
+```
 
-## What's Included
+## Extract layout and fields
 
-| File | Description |
-|------|-------------|
-| `CU-API-Testing-Guide.http` | Complete API testing guide with all sections |
-| `CU-API-Testing-Preview2.http` | Preview API features |
-| `custom-analyzer-with-replace.http` | Custom analyzer with field replacement |
+Analysis incurs charges. Review the input scope and cost before executing;
+use fresh output folders instead of silently reanalyzing existing results.
 
-## Next Steps
+```powershell
+cu analyze .\examples\02-Invoice-Extraction\samples\invoice.pdf `
+  --analyzer prebuilt-layout --output-dir .\cli-tutorial\layout `
+  --report-file .\cli-tutorial\layout-status.json --on-existing error
 
-Once you're comfortable with the REST API, move on to:
-- **[Tutorial 02: Invoice Extraction](../02-Invoice-Extraction/)** — Build a document analyzer using the agent-based workflow
-- **[Tutorial 03: Video Analysis](../03-Video-Analysis/)** — Build a video analyzer with timestamps
+cu analyze .\examples\02-Invoice-Extraction\samples\invoice.pdf `
+  --analyzer prebuilt-invoice --json --output-dir .\cli-tutorial\invoice `
+  --report-file .\cli-tutorial\invoice-status.json --on-existing error
+```
 
-## Documentation
+The first command saves markdown; the second saves native JSON, normally
+`invoice.pdf.result.json`. Inspect the status report separately from the
+extraction payload. Available analyzers and model mappings depend on your
+resource; inspect failures instead of treating empty/missing output as success.
 
-- [Azure Content Understanding Overview](https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/overview)
-- [REST API Reference](https://learn.microsoft.com/en-us/rest/api/contentunderstanding/operation-groups)
-- [Content Understanding Studio](https://aka.ms/cu-studio)
+## Create a custom analyzer
+
+```powershell
+cu analyzer validate .\examples\02-Invoice-Extraction\schemas\invoice_v1.json --api-version 2025-11-01
+cu analyzer create --name tutorial_invoice_v1 --schema .\examples\02-Invoice-Extraction\schemas\invoice_v1.json --api-version 2025-11-01
+cu analyzer show tutorial_invoice_v1 > .\cli-tutorial\analyzer-snapshot.json
+
+cu analyze .\examples\02-Invoice-Extraction\samples\invoice.pdf `
+  --analyzer tutorial_invoice_v1 --json --output-dir .\cli-tutorial\custom `
+  --report-file .\cli-tutorial\custom-status.json --on-existing error
+```
+
+Use a new versioned ID if this name already exists. Do not delete/recreate
+someone else's analyzer. When explicitly cleaning up the analyzer you created,
+use `cu analyzer delete tutorial_invoice_v1` and review its confirmation.
+
+## Continue with evidence-based development
+
+[Invoice extraction](../02-Invoice-Extraction/) adds schema design and reviewed
+evaluation. [Video analysis](../03-Video-Analysis/) covers timestamp grounding.
+For real investigations, copy the [case template](../_TEMPLATE/) into the
+appropriate public/private workspace and preserve numbered experiments.
+
+The former REST Client files are intentionally removed. The
+[official CLI reference](https://github.com/Azure/content-understanding-toolkit/tree/main/cu-cli)
+is the execution guide; use installed `--help` for version-specific features.

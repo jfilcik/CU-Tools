@@ -1,13 +1,21 @@
 # Examples
 
-Hands-on tutorials for Azure Content Understanding — from raw API exploration to AI-assisted analyzer development.
+Public tutorials for turning reproductions into evidence-based Content
+Understanding analyzer improvements, with quality and cost evaluated at each
+iteration toward safe straight-through processing.
+
+**Start a new case:** copy [_TEMPLATE](_TEMPLATE/) and follow the
+[canonical v1 workspace guide](../docs/iteration-workspaces.md). Keep customer
+data in a private workspace outside this library. Manual copying works; a
+customer repository or issue browser is optional.
 
 | Tutorial | What You'll Learn | Time |
 |----------|-------------------|------|
-| [01-API-Testing](01-API-Testing/) | Explore the CU REST API with HTTP test files in VS Code | 10 min |
+| [01-API-Testing](01-API-Testing/) | Explore CU with the official CLI | 10 min |
 | [02-Invoice-Extraction](02-Invoice-Extraction/) | Build a document analyzer using the agent-based workflow | 15 min |
 | [03-Video-Analysis](03-Video-Analysis/) | Build a video analyzer with keyframe-anchored timestamps | 15 min |
-| [05-Agentic-Contract-Obligations](05-Agentic-Contract-Obligations/) | Extract quote-grounded atomic obligations with the agentic preview API and evaluate against CUAD | 30+ min |
+| [05-Agentic-Contract-Obligations](05-Agentic-Contract-Obligations/) | Prepare public CUAD inputs and generate standalone offline broad-quality and clause-span reports | 30+ min |
+| [06-Contract-Obligation-Golden-Set](06-Contract-Obligation-Golden-Set/) | Compare Standard and Agentic extraction against reviewed atomic obligations | See tutorial |
 
 ## Recipes
 
@@ -19,26 +27,42 @@ Focused, self-contained fixes for specific problems:
 
 ## Prerequisites
 
-All tutorials require:
-- **Azure AI Foundry** with Content Understanding enabled ([Setup Guide](../docs/create_azure_ai_service.md))
-- A configured `.env` file (copy from `.env.sample` at repo root)
+Live CU operations require a configured resource and credentials; see the
+[root Quick Start](../README.md#quick-start). Copying the template and
+reviewing local evidence require no API calls.
 
-Tutorials 02 and 03 additionally require:
-- **Python 3.9+** with dependencies installed (`pip install -r requirements.txt`)
+For execution:
+- Use the official `cu` executable for every CU operation (Python 3.10+).
+- Local planning/evaluation tutorials additionally need CU-Tools dependencies.
+  CU configuration belongs to official profiles/`CU_*` variables; the CLI does
+  not load the repository `.env`.
 - **GitHub Copilot** (recommended — the tutorials walk through the agent-assisted workflow)
+- Obtain explicit cost approval for paid scale/stability work.
 
 ## Folder Structure
 
-Each Python tutorial follows the same project structure:
+New cases use numbered experiments:
 
-```
-ExampleName/
-├── README.md           # Tutorial walkthrough
-├── samples/            # Source documents or videos
-├── schemas/            # Analyzer schemas (versioned)
-├── layout_results/     # Layout extraction output (documents only)
-├── test_results/       # Analysis results by run
-└── reports/            # Summary reports and exports
+```text
+case/
+├── manifest.json
+├── README.md
+├── inputs/documents/             # Or an existing immutable samples/ corpus
+└── iterations/001/
+    ├── manifest.json
+    ├── inputs/schemas/
+    ├── outputs/raw/
+    ├── outputs/evaluation/
+    └── report.md
 ```
 
-This matches the project template pattern used for production work. See the `generate-analyzer` skill (`.github/skills/generate-analyzer.skill.md`) for the full workflow reference.
+Each manifest links the inputs, hypothesis, evidence, report, decision, and
+cost. New hypotheses/configurations/datasets/metrics get new numbers; repeated
+trials (`--iterations N`) stay within an experiment. Global fill/confidence is
+not STP evidence; record correctness, holdout scope, false accepts, and review.
+
+**Compatibility:** existing tutorials may retain `samples/`, `schemas/`,
+`layout_results/`, `test_results/`, and `reports/`. Do not move their evidence.
+[Invoice iteration 001](02-Invoice-Extraction/iterations/001/manifest.json)
+adds navigation to existing public sample/schema inputs only: it is **planned,
+not run**, with no claimed results or cost measurement.

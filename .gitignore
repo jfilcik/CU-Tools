@@ -27,3 +27,8 @@ examples/05-Agentic-Contract-Obligations/test_results/*
 examples/05-Agentic-Contract-Obligations/reports/*.json
 examples/05-Agentic-Contract-Obligations/reports/*.csv
 examples/05-Agentic-Contract-Obligations/reports/overall_accuracy.md
+
+# Standard-vs-Agentic obligation golden set: source contracts and live outputs
+examples/06-Contract-Obligation-Golden-Set/samples/downloaded/
+examples/06-Contract-Obligation-Golden-Set/test_results/
+examples/06-Contract-Obligation-Golden-Set/evaluation/output/

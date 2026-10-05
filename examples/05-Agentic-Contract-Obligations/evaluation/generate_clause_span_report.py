@@ -13,6 +13,14 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
+from contract_eval_common import (
+    format_measure,
+    load_run_metadata,
+    read_analysis_result,
+    recorded_number,
+    result_status,
+)
+
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 VALUE_KEYS = (
@@ -102,9 +110,11 @@ def read_jsonl(path: Path) -> dict[str, dict[str, Any]]:
 def predicted_by_category(
     result_path: Path,
     field_mapping: dict[str, str],
+    raw: dict[str, Any] | None = None,
 ) -> dict[str, list[str]]:
-    raw = json.loads(result_path.read_text(encoding="utf-8"))
-    contents = raw.get("result", {}).get("contents", [])
+    if raw is None:
+        raw = read_analysis_result(result_path)
+    contents = raw.get("result", raw).get("contents", [])
     fields = contents[0].get("fields", {}) if contents else {}
     clause_spans = unwrap_field(fields.get("ClauseSpans", {})) or {}
     return {
@@ -123,9 +133,12 @@ def score_run(
     gold_path: Path,
     mapping_path: Path,
     threshold: float,
+    report_path: Path | None = None,
 ) -> dict[str, Any]:
-    metadata = json.loads((result_dir / "metadata.json").read_text(encoding="utf-8"))
+    metadata = load_run_metadata(result_dir, report_path)
     benchmark = json.loads(benchmark_manifest_path.read_text(encoding="utf-8"))
+    if not benchmark.get("documents"):
+        raise ValueError("The benchmark manifest contains no documents to score.")
     gold_by_id = read_jsonl(gold_path)
     field_mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
     run_rows = {
@@ -149,10 +162,19 @@ def score_run(
 
         run_row = run_rows.get(doc_id, {"status": "failed", "error": "missing result"})
         status = run_row.get("status", "failed")
-        result_path = result_dir / f"{doc_id}.json"
+        result_path = Path(run_row.get("result_path", result_dir / f"{doc_id}.json"))
+        error = run_row.get("error", "")
+        if status == "success" and not result_path.exists():
+            status = "failed"
+            error = "missing result"
+        raw = read_analysis_result(result_path) if status == "success" else None
+        recorded_status = result_status(raw) if raw is not None else None
+        if recorded_status is not None and recorded_status.casefold() != "succeeded":
+            status = "failed"
+            error = f"Result operation status: {recorded_status}"
         predictions = (
-            predicted_by_category(result_path, field_mapping)
-            if status == "success" and result_path.exists()
+            predicted_by_category(result_path, field_mapping, raw)
+            if status == "success"
             else {category: [] for category in field_mapping}
         )
         doc_matches = doc_predictions = doc_gold = doc_grounded = 0
@@ -175,7 +197,7 @@ def score_run(
             {
                 "doc_id": doc_id,
                 "status": status,
-                "elapsed_seconds": float(run_row.get("elapsed_seconds", 0)),
+                "elapsed_seconds": recorded_number(run_row.get("elapsed_seconds")),
                 "predicted": doc_predictions,
                 "gold": doc_gold,
                 "matched": doc_matches,
@@ -185,11 +207,12 @@ def score_run(
                 "groundedness": (
                     doc_grounded / doc_predictions if doc_predictions else 0.0
                 ),
-                "error": run_row.get("error", ""),
+                "error": error,
             }
         )
-        if status == "success":
-            latencies.append(float(run_row.get("elapsed_seconds", 0)))
+        elapsed = recorded_number(run_row.get("elapsed_seconds"))
+        if status == "success" and elapsed is not None:
+            latencies.append(elapsed)
         total_predictions += doc_predictions
         total_gold += doc_gold
         total_matches += doc_matches
@@ -219,15 +242,15 @@ def score_run(
     started_at = metadata.get("started_at", "")
     completed_at = metadata.get("completed_at", "")
     attempts = metadata.get("attempts", [])
-    active_wall_seconds = 0.0
-    for attempt in attempts:
-        attempt_started = attempt.get("started_at", "")
-        attempt_completed = attempt.get("completed_at", "")
-        if attempt_started and attempt_completed:
-            active_wall_seconds += (
-                datetime.fromisoformat(attempt_completed.replace("Z", "+00:00"))
-                - datetime.fromisoformat(attempt_started.replace("Z", "+00:00"))
+    active_wall_seconds = None
+    if attempts and all(attempt.get("started_at") and attempt.get("completed_at") for attempt in attempts):
+        active_wall_seconds = sum(
+            (
+                datetime.fromisoformat(attempt["completed_at"].replace("Z", "+00:00"))
+                - datetime.fromisoformat(attempt["started_at"].replace("Z", "+00:00"))
             ).total_seconds()
+            for attempt in attempts
+        )
     if not attempts and started_at and completed_at:
         active_wall_seconds = (
             datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
@@ -235,6 +258,11 @@ def score_run(
         ).total_seconds()
     successes = sum(row["status"] == "success" for row in document_rows)
     token_summary = metadata.get("token_summary", {})
+    token_summary = {
+        **token_summary,
+        "total_input_tokens": recorded_number(token_summary.get("total_input_tokens")),
+        "total_output_tokens": recorded_number(token_summary.get("total_output_tokens")),
+    }
     return {
         "run": {
             "run_id": metadata.get("run_id", ""),
@@ -246,10 +274,11 @@ def score_run(
             "documents": len(document_rows),
             "successful": successes,
             "failed": len(document_rows) - successes,
-            "attempt_count": sum(
-                int(attempt.get("successful", 0)) + int(attempt.get("failed", 0))
-                for attempt in attempts
-            ) or len(document_rows),
+            "attempt_count": (
+                sum(int(attempt["successful"]) + int(attempt["failed"]) for attempt in attempts)
+                if attempts and all("successful" in attempt and "failed" in attempt for attempt in attempts)
+                else None
+            ),
         },
         "quality": {
             "precision": precision,
@@ -261,8 +290,8 @@ def score_run(
             "groundedness": grounded / total_predictions if total_predictions else 0.0,
         },
         "operational": {
-            "latency_mean_seconds": statistics.fmean(latencies) if latencies else 0.0,
-            "latency_max_seconds": max(latencies, default=0.0),
+            "latency_mean_seconds": statistics.fmean(latencies) if latencies else None,
+            "latency_max_seconds": max(latencies, default=None),
             "tokens": token_summary,
         },
         "categories": sorted(category_rows, key=lambda row: row["category"]),
@@ -290,9 +319,9 @@ def write_report(report: dict[str, Any], markdown_path: Path) -> None:
         "| Metric | Result |",
         "|---|---:|",
         f"| Completed | {run['successful']}/{run['documents']} |",
-        f"| Active execution time | {run['active_wall_seconds'] / 3600:.2f} hours |",
-        f"| Analysis attempts including retries | {run['attempt_count']} |",
-        f"| Mean completed latency | {operational['latency_mean_seconds'] / 60:.1f} min |",
+        f"| Active execution time | {format_measure(run['active_wall_seconds'], divisor=3600, format_spec='.2f', suffix=' hours')} |",
+        f"| Analysis attempts including retries | {format_measure(run['attempt_count'], format_spec=',.0f')} |",
+        f"| Mean completed latency | {format_measure(operational['latency_mean_seconds'], divisor=60, suffix=' min')} |",
         f"| Gold spans | {quality['gold']} |",
         f"| Predicted spans | {quality['predicted']} |",
         f"| Matched spans | {quality['matched']} |",
@@ -300,8 +329,12 @@ def write_report(report: dict[str, Any], markdown_path: Path) -> None:
         f"| Recall | {percent(quality['recall'])} |",
         f"| F1 | {percent(quality['f1'])} |",
         f"| Source groundedness | {percent(quality['groundedness'])} |",
-        f"| Input tokens | {int(operational['tokens'].get('total_input_tokens', 0)):,} |",
-        f"| Output tokens | {int(operational['tokens'].get('total_output_tokens', 0)):,} |",
+        f"| Input tokens | {format_measure(recorded_number(operational['tokens'].get('total_input_tokens')), format_spec=',.0f')} |",
+        f"| Output tokens | {format_measure(recorded_number(operational['tokens'].get('total_output_tokens')), format_spec=',.0f')} |",
+        "",
+        "Missing timing and token usage are not recorded, not zero. Native CLI "
+        "status reports do not include these measurements; --usage and --time "
+        "console output is not parsed as report metadata.",
         "",
         "## Per-category quality",
         "",
@@ -346,6 +379,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results", type=Path, required=True)
     parser.add_argument(
+        "--run-report",
+        type=Path,
+        help="Official cu analyze --report-file JSON; defaults to results/analyze-report.json.",
+    )
+    parser.add_argument(
         "--benchmark-manifest",
         type=Path,
         default=PROJECT_DIR / "test_results" / "clause-span-15-selection.json",
@@ -373,6 +411,7 @@ def main() -> None:
         args.gold.resolve(),
         args.mapping.resolve(),
         args.match_threshold,
+        report_path=args.run_report.resolve() if args.run_report else None,
     )
     write_report(report, args.output.resolve())
     print(args.output.resolve())

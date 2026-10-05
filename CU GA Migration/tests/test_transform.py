@@ -44,8 +44,7 @@ class TestTransformSimpleDocument:
     def test_generates_ga_id(self):
         source = _make_source("simple_document")
         proposed, _ = transform_analyzer(source)
-        assert proposed.analyzer_id.endswith("-ga")
-        assert "my-doc-analyzer" in proposed.analyzer_id
+        assert proposed.analyzer_id == "my_doc_analyzer_ga_v1"
 
     def test_adds_models_block(self):
         source = _make_source("simple_document")
@@ -69,13 +68,15 @@ class TestTransformUnknownScenario:
     def test_flags_unknown_scenario(self):
         source = _make_source("unknown_scenario")
         proposed, findings = transform_analyzer(source)
-        review_findings = [f for f in findings if f.severity == FindingSeverity.NEEDS_REVIEW and f.category == "base_analyzer"]
+        review_findings = [f for f in findings if f.severity == FindingSeverity.NOT_SUPPORTED and f.category == "base_analyzer"]
         assert len(review_findings) >= 1
 
-    def test_falls_back_to_prebuilt_document(self):
+    def test_unknown_scenario_has_no_success_shaped_fallback(self):
         source = _make_source("unknown_scenario")
         proposed, _ = transform_analyzer(source)
-        assert proposed.base_analyzer_id == "prebuilt-document"
+        assert proposed.base_analyzer_id == ""
+        assert "baseAnalyzerId" not in proposed.ga_payload
+        assert proposed.validation_status == ValidationStatus.FAIL
 
 
 class TestTransformProMode:

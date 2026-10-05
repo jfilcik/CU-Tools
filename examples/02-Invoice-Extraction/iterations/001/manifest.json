@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "kind": "iteration",
+  "id": "001",
+  "title": "Existing public invoice baseline",
+  "hypothesis": "The existing invoice schema can extract the selected public invoice's critical fields correctly against reviewed source values.",
+  "status": "planned",
+  "baseline_iteration": null,
+  "defect_ids": [],
+  "bugs": [],
+  "changes": [],
+  "execution": {
+    "command": null,
+    "api_version": null,
+    "model": null,
+    "analyzer_id": null,
+    "region": null,
+    "tool_version": null
+  },
+  "inputs": [
+    {
+      "label": "Existing public invoice sample",
+      "path": "../../samples/invoice.pdf",
+      "role": "document",
+      "sha256": "4da941f20655cb852986df272a22f66aff47c97a18b103a1e8e44641cf581642"
+    },
+    {
+      "label": "Existing schema proposed for baseline; snapshot before execution",
+      "path": "../../schemas/invoice_v1.json",
+      "role": "schema",
+      "sha256": "7e8e908f0822e6b2aaad437be61ee888f2ba88f18645629f185ea2fd25573569"
+    }
+  ],
+  "outputs": [
+    {
+      "label": "Baseline plan; not an execution report",
+      "path": "report.md",
+      "role": "report"
+    }
+  ],
+  "results": {
+    "summary": "Not run; existing public inputs are linked, but no execution, reviewed evaluation, or cost measurement exists for this iteration.",
+    "metrics": [],
+    "cost": {
+      "status": "unknown",
+      "amount": null,
+      "currency": "USD",
+      "basis": "No API analysis or evaluation was run for this iteration; no usage, pricing calculation, or attributable charge evidence is available."
+    },
+    "decision": "Retain as a planned baseline until schema snapshot, reviewed truth, acceptance criteria, execution configuration, and any required cost approval are ready.",
+    "limitations": [
+      "Only the existing invoice.pdf is selected; receipt.png is not part of this baseline.",
+      "The schema is a hash-pinned shared input, not yet an iteration-local execution snapshot.",
+      "No reviewed truth, versioned evaluator, holdout, or acceptance policy has been supplied.",
+      "No extraction quality, latency, cost, or STP outcome has been measured."
+    ]
+  }
+}

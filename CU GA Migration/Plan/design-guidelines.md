@@ -1,4 +1,9 @@
-Here’s **`design-guidelines.md`**.
+# Offline Migration Presentation Guidelines
+
+The implemented product is a CLI and local report bundle, not a connected web
+application. The visual ideas below are optional presentation guidance.
+Never imply that the helper authenticated, inspected a resource, or deployed
+an analyzer. Creation is a separate explicit official `cu` operation.
 
 ```markdown
 ## Emotional tone
@@ -183,7 +188,7 @@ Example:
 
 **No analyzers found**
 
-“Connect to a CU resource to begin inventory.”
+“Export analyzer JSON with the official cu CLI, then supply a local --input.”
 
 ---
 
@@ -202,11 +207,11 @@ Avoid alarmist wording.
 
 **Onboarding**
 
-“Connect your Azure Content Understanding resource to begin analyzer discovery.”
+“Supply analyzer JSON exported with the official cu CLI to begin offline inventory.”
 
 **Success**
 
-“Migration completed. 12 analyzers created.”
+“12 proposals exported for review. No analyzers were deployed.”
 
 **Error**
 
@@ -275,7 +280,7 @@ Users must be able to:
 
 - navigate analyzer list
 - open review panel
-- confirm migration
+- review proposals and copy explicit official CLI commands
 
 ### Focus indicators
 

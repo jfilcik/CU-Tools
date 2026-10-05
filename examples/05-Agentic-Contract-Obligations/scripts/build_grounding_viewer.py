@@ -11,10 +11,14 @@ import html
 import json
 import re
 import shutil
+import sys
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evaluation"))
+from contract_eval_common import load_results, load_run_metadata, read_analysis_result, result_status
 
 
 VALUE_KEYS = (
@@ -154,14 +158,24 @@ def load_result_map(result_dirs: list[Path]) -> tuple[dict[str, Path], dict[str,
     result_files: dict[str, Path] = {}
     outcomes: dict[str, dict[str, Any]] = {}
     for result_dir in result_dirs:
+        if (result_dir / "analyze-report.json").exists():
+            metadata = load_run_metadata(result_dir)
+            for item in metadata["results"]:
+                doc_id = Path(item["document"]).stem.casefold()
+                outcomes[doc_id] = item
+                path = Path(item.get("result_path", result_dir / f"{doc_id}.json"))
+                if item["status"] == "success" and path.exists():
+                    result_files[doc_id] = path
+            continue
         metadata_path = result_dir / "metadata.json"
         if metadata_path.exists():
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             for item in metadata.get("results", []):
                 outcomes[Path(item.get("document", "")).stem.casefold()] = item
-        for path in result_dir.glob("*.json"):
-            if path.name not in {"metadata.json", "selection_manifest.json", "recovery.json"}:
-                result_files[path.stem.casefold()] = path
+        for result in load_results(result_dir):
+            metadata = result["_metadata"]
+            source = metadata.get("document") or metadata["source_file"]
+            result_files[Path(source).stem.casefold()] = result_dir / metadata["result_file"]
     return result_files, outcomes
 
 
@@ -219,12 +233,14 @@ def build_document(
     if not result_path:
         return record
 
-    raw = json.loads(result_path.read_text(encoding="utf-8"))
+    raw = read_analysis_result(result_path)
     content = result_content(raw)
     fields = content.get("fields", {})
     pages = content.get("pages", [])
     words, positions = build_word_index(pages)
-    record["status"] = raw.get("status", "Succeeded").casefold()
+    record["status"] = (
+        result_status(raw) or (outcome or {}).get("status") or "not recorded"
+    ).casefold()
     record["pageGeometry"] = [
         {
             "page": page.get("pageNumber"),

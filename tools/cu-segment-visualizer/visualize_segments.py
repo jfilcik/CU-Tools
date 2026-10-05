@@ -80,21 +80,44 @@ def build_page_map(segments: list) -> dict:
     return page_map
 
 
+def load_segments(data: dict) -> list:
+    """Read native classified contents or saved nested segmentation results."""
+    result = data.get("result", data) if isinstance(data, dict) else None
+    contents = result.get("contents") if isinstance(result, dict) else None
+    if not isinstance(contents, list):
+        raise ValueError("Expected CU contents in the result JSON")
+    segments = []
+    for index, content in enumerate(contents):
+        if not isinstance(content, dict):
+            raise ValueError("CU content must be an object")
+        if "segments" in content:
+            nested = content["segments"]
+            if not isinstance(nested, list):
+                raise ValueError("CU segments must be an array")
+            segments.extend(nested)
+        elif "category" in content:
+            segments.append({
+                "startPageNumber": content.get("startPageNumber"),
+                "endPageNumber": content.get("endPageNumber"),
+                "category": content["category"],
+                "segmentId": content.get("segmentId", f"content_{index + 1}"),
+            })
+    if not segments:
+        raise ValueError("No page segmentation evidence found in the CU result")
+    for segment in segments:
+        if not isinstance(segment, dict):
+            raise ValueError("CU segment must be an object")
+        start = segment.get("startPageNumber")
+        end = segment.get("endPageNumber")
+        if type(start) is not int or type(end) is not int or start < 1 or end < start:
+            raise ValueError("Segments require valid start/end page numbers")
+    return segments
+
+
 def annotate_pdf(pdf_path: str, results_path: str, output_path: str):
     """Annotate a PDF with segmentation results."""
-    with open(results_path) as f:
-        data = json.load(f)
-
-    result = data.get("result", data)
-    contents = result.get("contents", [])
-    if not contents:
-        print(f"  Warning: No contents in results for {pdf_path}")
-        return
-
-    segments = contents[0].get("segments", [])
-    if not segments:
-        print(f"  Warning: No segments found in results for {pdf_path}")
-        return
+    with open(results_path, encoding="utf-8") as f:
+        segments = load_segments(json.load(f))
 
     page_map = build_page_map(segments)
 
@@ -325,22 +348,30 @@ def main():
         output_dir = Path(args.output_dir or "annotated_output")
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        pdf_files = sorted(pdf_dir.glob("*.pdf"))
+        pdf_files = sorted(pdf_dir.rglob("*.pdf"))
         print(f"Found {len(pdf_files)} PDFs in {pdf_dir}")
 
+        failures = 0
         for pdf_file in pdf_files:
-            result_file = results_dir / f"{pdf_file.stem}.json"
-            if not result_file.exists():
-                print(f"  Skipping {pdf_file.name} — no matching results")
+            relative = pdf_file.relative_to(pdf_dir)
+            candidates = [
+                results_dir / relative.parent / f"{pdf_file.name}.result.json",
+                results_dir / relative.parent / f"{pdf_file.stem}.json",
+            ]
+            matches = [path for path in candidates if path.is_file()]
+            if len(matches) != 1:
+                print(f"  Error: {relative} has {len(matches)} matching results; expected one", file=sys.stderr)
+                failures += 1
                 continue
-            output_file = output_dir / f"{pdf_file.stem}_segmented.pdf"
+            output_file = output_dir / relative.parent / f"{pdf_file.stem}_segmented.pdf"
+            output_file.parent.mkdir(parents=True, exist_ok=True)
             print(f"\nAnnotating: {pdf_file.name}")
             try:
-                annotate_pdf(str(pdf_file), str(result_file), str(output_file))
-            except Exception as e:
-                print(f"  Error: {e}")
-                import traceback
-                traceback.print_exc()
+                annotate_pdf(str(pdf_file), str(matches[0]), str(output_file))
+            except (OSError, ValueError, RuntimeError) as exc:
+                print(f"  Error for {relative}: {exc}", file=sys.stderr)
+                failures += 1
+        return 1 if failures or not pdf_files else 0
     else:
         parser.print_help()
         print("\nExamples:")
@@ -349,4 +380,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+    raise SystemExit(main())

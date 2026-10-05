@@ -1,7 +1,10 @@
 # CU Analyzer Testing Lab - Core Requirements
 # Install with: pip install -r requirements.txt
 
-# Core dependencies for CU analysis tools
+# Official CLI is the only CU service execution backend.
+cu-cli>=0.1.0b1,<0.2.0
+
+# Supporting local tools and customer Azure Monitor exports
 python-dotenv>=1.0.0
 requests>=2.28.0
 azure-identity>=1.12.0

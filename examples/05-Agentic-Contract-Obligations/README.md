@@ -1,18 +1,25 @@
 # Agentic contract obligation extraction
 
-This example creates a single Content Understanding analyzer that extracts contract metadata, parties, and atomic obligations. Every obligation requires exact source quotations and is evaluated with deterministic metrics.
+This example creates a single Content Understanding analyzer that extracts contract metadata, parties, and atomic obligations. Every obligation requires exact source quotations. Standalone offline reports evaluate mapped CUAD clause discovery, evidence, and returned usage; they do not measure complete atomic-obligation accuracy.
 
 ## Verified preview contract
 
 | Setting | Value |
 |---|---|
-| Region | Southeast Asia |
+| Historical validation region | Southeast Asia |
 | API version | `2026-06-01-preview` |
 | Model | `gpt-5.2` |
 | Agentic selector | `config.workflow: "Agentic"` |
 | Input | One file per analysis request |
 
-The GA default remains `2025-11-01`; every command in this example passes the preview API explicitly.
+Use your own authorized Azure AI resource with access to the listed preview API
+and model. No particular subscription, resource group, storage account, or
+region is required by this example. Verify preview availability in your chosen
+region before any paid analysis. Install and configure the official `cu`
+executable using the repository README; do not copy another environment's
+credentials. All CU service operations below use that executable.
+
+The GA default remains `2025-11-01`; every analyzer command in this example passes the preview API explicitly.
 
 Two versioned schemas are available:
 
@@ -34,49 +41,119 @@ python ..\..\tools\cu-analyzer-validate\cu_analyzer_validator.py `
   --api-version 2026-06-01-preview
 ```
 
-Run one development contract first:
+Run one development contract first. Each example uses a new analyzer ID and
+separates creation, analysis, and deletion:
 
 ```powershell
-python ..\..\tools\cu-analyzer-run\create_and_test.py `
+$selection = Get-Content dataset\selection_manifest.json -Raw | ConvertFrom-Json
+$sample = ($selection.documents | Where-Object split -eq "development" | Select-Object -First 1).doc_id
+$analyzer = "cuad_obligations_v1_" + [guid]::NewGuid().ToString("N")
+$runDir = Join-Path "test_results\development" $analyzer
+
+cu analyzer create --name $analyzer `
   --schema schemas\contract_obligations_agentic_v1.json `
-  --input samples\downloaded\<one-contract>.txt `
-  --output test_results\development\<contract-id> `
-  --api-version 2026-06-01-preview `
-  --timeout 600
+  --api-version 2026-06-01-preview
+if ($LASTEXITCODE -ne 0) { throw "Analyzer creation failed; do not analyze." }
+try {
+  cu analyze --file "samples\downloaded\$sample.txt" --analyzer $analyzer `
+    --json --output-dir $runDir --report-file "$runDir\analyze-report.json" `
+    --concurrency 1 --api-version 2026-06-01-preview --yes --on-existing error
+  if ($LASTEXITCODE -ne 0) { Write-Warning "Analysis failed; inspect the saved status report." }
+}
+finally {
+  cu analyzer delete $analyzer --api-version 2026-06-01-preview --yes
+}
 ```
 
-Agentic analysis can be expensive and slow. A short compatibility contract completed in about 79 seconds and used approximately 36,000 tokens during validation; a long CUAD contract exceeded a 600-second timeout. Obtain cost approval before running all 20 held-out contracts or stability repetitions.
+Agentic analysis can be expensive and slow. Historically, a short compatibility
+contract completed in about 79 seconds and used approximately 36,000 tokens;
+a long CUAD contract exceeded the former runner's 600-second timeout. The
+official CLI has no `--timeout` option. Obtain cost approval before any corpus
+batch or stability repetitions. Check deletion output and rerun that explicit
+delete command if cleanup fails; never delete an analyzer from another run.
 
 Prepare and run the deterministic 15-document clause-span benchmark:
 
 ```powershell
 python scripts\prepare_clause_span_benchmark.py
-python ..\..\tools\cu-analyzer-run\create_and_test.py `
+if ($LASTEXITCODE -ne 0) { throw "Benchmark preparation failed; do not analyze." }
+$analyzer = "cuad_spans_v1_" + [guid]::NewGuid().ToString("N")
+$runDir = Join-Path "test_results\clause-span-15" $analyzer
+
+cu analyzer create --name $analyzer `
   --schema schemas\cuad_clause_spans_agentic_v1.json `
-  --input test_results\clause-span-15-input `
-  --output test_results\clause-span-15 `
-  --api-version 2026-06-01-preview `
-  --timeout 1800 `
-  --max-workers 1
+  --api-version 2026-06-01-preview
+if ($LASTEXITCODE -ne 0) { throw "Analyzer creation failed; do not analyze." }
+try {
+  cu analyze --source test_results\clause-span-15-input --recursive `
+    --analyzer $analyzer --json --output-dir $runDir `
+    --report-file "$runDir\analyze-report.json" --concurrency 1 `
+    --api-version 2026-06-01-preview --yes --on-existing error
+  if ($LASTEXITCODE -ne 0) { Write-Warning "Some analyses failed; include them in the offline report." }
+}
+finally {
+  cu analyzer delete $analyzer --api-version 2026-06-01-preview --yes
+}
 
 python evaluation\generate_clause_span_report.py `
-  --results test_results\clause-span-15
+  --results $runDir --run-report "$runDir\analyze-report.json" `
+  --output "$runDir\quality.md"
 ```
 
 ## Evaluate
 
-Manually verify the six atomic annotation documents listed in `dataset/selection_manifest.json`, then build and run:
+The existing report scripts run locally using only the Python standard library.
+They consume the official CLI's `cu-cli/analyze-report/v1` status report,
+saved `--json` SDK results, and the generated CUAD selection/ground truth.
+Use `--run-report` for the status report, or save it as `analyze-report.json`
+inside the result directory. Previously saved CU-Tools `metadata.json` bundles
+remain readable offline; no legacy runner or service client is needed.
+They do not call Azure or require internal telemetry, special diagnostic
+headers, or an evaluation service.
+Analysis JSON validation and native-result normalization use the shared offline
+`tools/cu-results-export/cu_result_io.py` loader. Malformed expected result files
+stop reporting with an error; they are not silently skipped.
 
 ```powershell
-python scripts\build_evallens_dataset.py --results test_results\development
-$env:PYTHONPATH = "C:\src\EvalLens"
-cd evaluation
-python -m evallens validate --config config.yml
-python -m evallens run --run-id contract_obligations_v1 --config config.yml
-python generate_accuracy_report.py --input output\local_results\contract_obligations_v1\<result.json>
+# Broad obligations: score all held-out documents in the selection manifest.
+python evaluation\generate_broad_quality_report.py `
+  --results test_results\<held-out-run> `
+  --run-report test_results\<held-out-run>\analyze-report.json `
+  --output-prefix test_results\broad-quality\quality
+
+# Category-specific exact spans: use the prepared benchmark selection.
+python evaluation\generate_clause_span_report.py `
+  --results test_results\clause-span-15\<run-id> `
+  --run-report test_results\clause-span-15\<run-id>\analyze-report.json `
+  --output test_results\clause-span-report\quality.md
+
+# Offline regression tests; no service credentials required.
+python -m pytest evaluation\tests `
+  --basetemp test_results\pytest-offline -p no:cacheprovider
 ```
 
-The weighted score is: discovery 30%; type 15%; party roles 20%; quote groundedness 10%; quote alignment 15%; completeness 5%; duplicate control 5%.
+Both reports write Markdown, JSON, and CSV. Failed or missing analyses remain in
+the quality denominator; an empty selection is an error. Broad-report
+`Completion status: PASS` means every selected analysis completed, not that
+quality passed. Report model and region come from run metadata when recorded,
+otherwise they are explicitly unknown. Failed, skipped, and missing outputs
+are never treated as successful evaluation.
+
+Native CLI status reports do not contain per-document latency, run timestamps,
+model/region, or structured usage totals. Missing measurements remain `null` in
+JSON, blank in CSV, and `not recorded` in Markdown—not zero. CLI `--usage` and
+`--time` print separately to stderr; these reporters do not parse that console
+output or invent missing measurements. Keep raw results and the original status
+report together, and do not overwrite results from a previous run.
+
+The former **EvalLens integration has been removed** because it depended on a
+non-public repository/package. Its configuration, dataset builder, evaluator
+plugins, runner, and seven-component weighted accuracy report are no longer
+available. The retained reports do **not** score atomic party roles,
+completeness, duplicate control, or a weighted atomic-obligation total.
+`ground_truth/annotation_guidelines.md` and the six-contract annotation selection
+remain useful for manual review; skipped or unverified atomic evaluation must
+not be reported as passing.
 
 ## Broad preview result
 
@@ -120,8 +197,9 @@ source control.
 - `schemas/` - versioned agentic analyzer
 - `dataset/` - pinned CUAD checksum, mapping, and generated selection manifest
 - `ground_truth/` - annotation contract and locally generated gold JSONL
-- `scripts/` - safe downloader, deterministic selector, and EvalLens dataset builder
-- `evaluation/` - canonical preprocessor, seven deterministic evaluators, tests, and report generator
-- `samples/`, `test_results/`, `reports/` - generated local artifacts
+- `scripts/` - safe public-data downloaders, deterministic selectors, and local grounding viewer
+- `evaluation/` - pure CU normalization, matching helpers, standalone quality reports, and offline tests
+- `samples/`, `test_results/` - generated local artifacts
+- `reports/` - reviewed historical measurements; keep new reports under ignored `test_results/`
 
 See `IMPLEMENTATION_GUIDE.md` for the transferable end-to-end design.

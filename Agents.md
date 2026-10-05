@@ -1,737 +1,357 @@
-# AGENTS.md - CU Analyzer Testing Lab
+# Agents.md - CU Analyzer Testing Lab
 
-## Purpose
+## Purpose and sources of truth
 
-This repository is a **streamlined toolkit for creating and testing Azure AI Content Understanding (CU) analyzers**. It's designed for developers who need to extract structured data from documents (invoices, forms, contracts, etc.) using AI-powered field extraction.
+Turn customer reproductions into evidence-based Content Understanding analyzer
+improvements. Evaluate correctness and cost at each numbered iteration,
+progressing toward safe straight-through processing (STP).
 
-**Target Audience**: Developers building CU analyzers for production use, testing schema designs, and validating extraction quality.
+This file is authoritative for CU workflow boundaries and analyzer correctness.
+[docs/iteration-workspaces.md](docs/iteration-workspaces.md) defines case and
+iteration manifests, evidence, cost, and STP gates.
+`.github/copilot-instructions.md` contains behavior and routing, not duplicate
+technical specifications. `README.md` owns installation instructions.
 
-> **⚠️ DEDUPLICATION RULE**: This file is the authoritative source for technical specifications.
-> `.github/copilot-instructions.md` contains behavioral guidance and quick references only.
-> Do NOT duplicate content between these files. When adding new content:
-> - **Here**: API rules, error handling, testing patterns, definition of done, correctness rules
-> - **copilot-instructions.md**: AI behavior, vocabulary, style constraints, navigation hints
+## Repo map
 
-**Key Use Cases**:
-- Schema development with AI-assisted field generation
-- Scale testing (1×N documents) to verify coverage across document variations
-- Stability testing (N×1 document) to measure extraction consistency
-- Cost estimation and token usage analysis
-- Results export and analysis in CSV/Excel format
+| Surface | Responsibility |
+|---------|----------------|
+| Official `cu` executable | All CU service operations, authentication, discovery, scheduling, polling, retries, result serialization |
+| `tools/cu-experiments/experiment.py` | Freeze a repeat/comparison matrix, invoke native CLI batches within one global concurrency budget, reconcile outcomes |
+| `tools/cu-schema-plan/schema_plan.py` | Offline schema validation, dependency ordering, reference rewriting, immutable deployment snapshots and CLI command plans |
+| `tools/cu-analyzer-validate/cu_analyzer_validator.py` | Offline schema quality and preview-contract checks |
+| `tools/cu-results-export/export.py` | CSV/Excel and field diagnostics from saved native/legacy results |
+| `tools/cu-cost-estimator/` | Explicit-usage/schema estimates and result-cost summaries |
+| `tools/cu-usage-diagnostics/usage_diagnostics.py` | Customer-visible Azure Monitor usage exports in the caller's Storage account |
+| `CU GA Migration/` | Offline inventory and conversion of exported analyzer definitions |
+| `tools/cu-reading-order-viz/`, `tools/cu-segment-visualizer/`, `tools/cu-visualize/` | Local result/layout inspection |
+| `tools/pdf-to-images/` | Local PDF rendering |
+| `tools/pii-redact/` | Separate Azure Language-assisted PII workflow, not a CU execution backend |
+| `.github/skills/`, `.github/prompts/` | Guided analyzer development and evaluation |
+| `examples/_TEMPLATE/` | Copyable public-safe case and planned iteration |
+| `examples/01-API-Testing/` | Official CLI exploration |
+| `examples/02-Invoice-Extraction/`, `examples/03-Video-Analysis/` | Document/video tutorials |
+| `examples/05-Agentic-Contract-Obligations/` | Public CUAD preparation and standalone quality reports |
+| `examples/06-Contract-Obligation-Golden-Set/` | Reviewed ten-contract Standard/Agentic comparison |
 
----
-
-## Repo Map
-
-### Core Capabilities
-
-**Analysis & Testing**:
-- `tools/cu-analyzer-run/`
-  - `run.py` - Run analysis with existing analyzer or extract layout for schema development
-  - `create_and_test.py` - Create analyzer from schema and test on samples (all-in-one workflow)
-
-**Validation & Export**:
-- `tools/cu-analyzer-validate/`
-  - `cu_analyzer_validator.py` - Validate schema before creating analyzer (auto-runs in create_and_test.py)
-- `tools/cu-results-export/`
-  - `export.py` - Export JSON results to CSV/Excel for analysis
-- `tools/cu-cost-estimator/`
-  - `cu_cost_estimator.py` - Estimate CU costs from schemas or actual API usage
-  - `generate_cost_summary.py` - Aggregate token usage and cost across result files
-
-**Client Library**:
-- `tools/cu-client/`
-  - `content_understanding_client.py` - Base CU API client (shared by all tools)
-
-**Supporting Tools**:
-- `tools/cu-reading-order-viz/`
-  - `visualize_reading_order.py` - Overlays numbered bounding boxes and directional arrows onto PDF pages to visualize the reading order produced by CU Layout extraction. Use to diagnose mis-ordered paragraphs or layout quality issues. Supports single documents, batch folders, side-by-side comparison of two layout sources (e.g. prod vs selfhost), and per-page filtering. Auto-detects CU (`result.contents[].paragraphs`) and Document Intelligence (`analyzeResult.paragraphs`) JSON formats.
-
-### Documentation
-
-**Getting Started**:
-- `README.md` - Overview and quick start
-- `GETTING_STARTED.md` - Step-by-step first analyzer walkthrough
-- `Agents.md` (this file) - Authoritative guide for AI assistants
-
-**Guidance**:
-- `.github/copilot-instructions.md` - AI assistant behavior and navigation preferences
-- `.github/TROUBLESHOOTING.md` - Common issues and solutions
-- `.github/ISSUE_TEMPLATE.md` - Issue reporting template
-- `.github/PULL_REQUEST_TEMPLATE.md` - PR template
-
-**AI Prompts & Skills**:
-- `.github/prompts/` - AI-assisted task prompts (6 files)
-  - `analyze-document-structure.prompt.md` - Understand document layout
-  - `generate-analyzer-schema.prompt.md` - Create analyzer schema
-  - `write_schema_fields.prompt.md` - Write field descriptions
-  - `evaluate-analyzer.prompt.md` - Core eval workflow (scale/stability)
-  - `evaluate-analyzer-video.prompt.md` - Video-specific eval (timestamps, keyframes)
-  - `classify-and-route-schema.prompt.md` - Classifier schema design and nesting rules
-- `.github/skills/` - Complete workflow guides
-  - `generate-analyzer.skill.md` - Analyzer creation workflow (standard, single document type)
-  - `generate-analyzer-video.skill.md` - Video analyzer with keyframe-anchored timestamps
-  - `generate-analyzer-classify-route.skill.md` - Classifier + multi-type routing (advanced pattern)
-  - `eval-cu.skill.md` - Evaluation workflow
-  - `cu-preview-api.skill.md` - Preview API and agentic compatibility workflow
-
-### Examples
-
-**Reusable Examples** (`examples/`):
-- `05-Agentic-Contract-Obligations/` - Preview agentic contract extraction with exact-quote evidence, CUAD preparation, and EvalLens evaluation
-- `06-Contract-Obligation-Golden-Set/` - Reviewed ten-contract atomic-obligation gold set with paired Standard and Agentic schemas, fail-closed evaluation, notebook, and measured comparison report
-
-### Configuration
-
-- `.env.sample` - Template for Azure credentials
-- `requirements.txt` - Core Python dependencies
-- `schemas/` - User-created analyzer schemas
-
----
+There is no local CU REST client or compatibility package. Never import
+`cu_cli`/`cu_cli_core` implementation modules from shipped helpers; the supported
+execution boundary is the official executable.
 
 ## Commands
 
-### Setup
+### CLI-only operation routing
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+Use `cu` directly for connectivity, analyzer list/show/validate/create/delete,
+model defaults, layout, and file/folder analysis. Use the installed version's
+`--help`; do not translate flags from deleted tools mechanically. The documented
+contract was checked against public `cu-cli 0.1.0b1`.
 
-# Configure Azure credentials
-cp .env.sample .env
-# Edit .env with your AZURE_AI_ENDPOINT and AZURE_AI_API_KEY
+The official CLI owns profiles and `CU_*` environment settings. It does not
+load this repository's `.env`. No helper should maintain a second CU
+credential/configuration path or put credentials in command arguments.
+
+```powershell
+cu doctor
+cu analyzer list --json
+cu analyzer validate .\schemas\invoice_v1.json --api-version 2025-11-01
+cu analyzer create --name invoice_v1 --schema .\schemas\invoice_v1.json --api-version 2025-11-01
+cu analyzer show invoice_v1 > .\invoice_v1-deployed.json
+
+cu analyze .\invoice.pdf --analyzer prebuilt-layout --output-dir .\layout --on-existing error
+cu analyze --source .\samples --recursive --analyzer invoice_v1 --json --output-dir .\results --report-file .\status.json --concurrency 5 --on-existing error
 ```
 
-**Explanation**: Installs all required Python packages and sets up Azure AI credentials. The `.env` file must contain your Azure AI endpoint and API key from Azure AI Foundry.
+Analysis is billable. Review discovery with `--dry-run`; supply `--yes` only
+after approving the scope and charge. The CLI's `--on-existing skip` avoids
+reanalyzing existing outputs; `reanalyze` bills again. Experiments use new paths
+and must not mix stale output with new evidence.
 
-### Validate Setup
+Custom analyzer IDs use letters, digits, and underscores (maximum 64
+characters). Prefer a new version rather than deleting/recreating an existing
+ID. There is no implicit replace operation. Cleanup requires explicit intent
+and must target only resources actually created/owned by the experiment.
+Inspect resource-wide defaults with `cu defaults show`; merge only the
+requested mapping using `cu defaults set --model MODEL=DEPLOYMENT`. Do not
+use `--replace` incidentally.
 
-```bash
-# Test Azure connectivity (if validation scripts exist)
-python tools/cu-analyzer-validate/cu_analyzer_validator.py schemas/example.json
+### Narrow local helpers
+
+The existing validator is offline and uses the standard library:
+
+```powershell
+python tools\cu-analyzer-validate\cu_analyzer_validator.py .\schemas\invoice_v1.json
 ```
 
-**Explanation**: Validates that your schema is correct before attempting to create an analyzer. This catches errors early and provides clear error messages.
+For dependency graphs, plan locally before executing any service operations:
 
-### Test
-
-```bash
-# Validate a schema file
-python tools/cu-analyzer-validate/cu_analyzer_validator.py schemas/my_analyzer.json
-
-# Run validation on multiple schemas
-find schemas -name "*.json" -exec python tools/cu-analyzer-validate/cu_analyzer_validator.py {} \;
+```powershell
+python tools\cu-schema-plan\schema_plan.py `
+  --schema invoice=.\schemas\invoice.json `
+  --schema packet=.\schemas\packet.json `
+  --id-prefix case001_v1 --output .\deployment-plan `
+  --api-version 2025-11-01
 ```
 
-**Explanation**: Use validation to catch schema errors before creating analyzers. The validator checks JSON syntax, required fields, field types, and description quality.
+Source aliases in `baseAnalyzerId` and `contentCategories.*.analyzerId` become
+versioned IDs. Undeclared external references, cycles, collisions, or invalid
+schemas fail planning. `plan.json` contains source/snapshot hashes and
+dependency-first create argument arrays. Review and execute these from the
+plan directory using the official CLI; planning never checks Azure or deploys
+anything. Cleanup arrays are suggestions, not proof every analyzer was created.
 
-### Run Examples
+For repeated trials/comparisons:
 
-**Extract Layout** (Stage 1: OCR + Document Structure):
-```bash
-python tools/cu-analyzer-run/run.py \
-  --layout \
-  --input samples/ \
-  --output layout_results/
+```powershell
+python tools\cu-experiments\experiment.py plan `
+  --input .\invoice.pdf --analyzer invoice_v1 --analyzer invoice_v2 `
+  --iterations 10 --concurrency 5 --output .\experiment `
+  --api-version 2025-11-01
+
+# Only after scope/cost approval:
+python tools\cu-experiments\experiment.py run .\experiment --confirm-cost
 ```
 
-**Explanation**: Runs prebuilt-layout analysis to extract text and document structure. Use this to understand document layout before creating schemas. Creates `.layout.md` markdown files showing extracted text.
+The CLI has one analyzer per invocation and per-batch concurrency of 1..32.
+It has no native repeat/multi-analyzer matrix option in the verified release.
+The helper freezes distinct trial files and divides one global analysis budget
+among CLI processes. It does not reimplement per-document service calls,
+polling, or retries. Expected jobs must reconcile with native reports/results;
+missing, failed, malformed, or unexpected output is not success. Preserve
+partial evidence and use a new plan for an explicitly approved retry.
+The immutable `experiment.json` and changing `run.json` are separate contracts.
+Capture deployed schema definitions explicitly; the helper's analyzer IDs are
+not proof of immutable remote schema identity.
 
-**Create Analyzer and Test** (Complete Workflow):
-```bash
-python tools/cu-analyzer-run/create_and_test.py \
-  --schema schemas/my_analyzer_v1.json \
-  --input samples/ \
-  --output test_results/v1
-```
+### Issue and iteration workspaces
 
-**Explanation**: All-in-one command that validates schema, creates analyzer, and runs tests on sample documents. Use this for iterative schema development.
+Select the case and numbered iteration before generating artifacts. Follow
+the [canonical guide](docs/iteration-workspaces.md), not a competing layout.
+Keep customer cases private and preserve historical inputs/results in place.
+New configuration, hypothesis, dataset, or metric changes require a new
+iteration; repeated trials belong inside that iteration.
 
-**Run Analysis with Existing Analyzer**:
-```bash
-# Single document
-python tools/cu-analyzer-run/run.py \
-  --analyzer-id my-analyzer \
-  --input document.pdf \
-  --output results/single/
+Freeze input/schema inventories, evaluator/truth versions, commands and CLI
+version, API version, analyzer IDs, raw results, evaluation, cost basis, report,
+and decision. Synchronize the root index from iteration manifests.
+Record verified tracking bugs at issue and directly relevant iteration levels,
+separately from local defect IDs. Never guess bug status, links, or resource
+identity. Keep published issue IDs/share slugs stable.
 
-# Batch analysis (folder)
-python tools/cu-analyzer-run/run.py \
-  --analyzer-id my-analyzer \
-  --input documents/ \
-  --output results/batch/
-
-# Stability test (10 iterations)
-python tools/cu-analyzer-run/run.py \
-  --analyzer-id my-analyzer \
-  --input document.pdf \
-  --iterations 10 \
-  --output results/stability/
-```
-
-**Explanation**: Use these patterns for testing existing analyzers. Stability tests (N×1) measure consistency, batch analysis (1×N) measures coverage.
-
-**Export Results to CSV**:
-```bash
-python tools/cu-results-export/export.py \
-  --input test_results/v1 \
-  --output test_results/v1/results.csv
-```
-
-**Explanation**: Converts JSON results to CSV for analysis in Excel. Creates one row per document with all extracted fields, confidence scores, and metadata.
-
----
-
-## API Rules & Correctness
+## API rules and correctness
 
 ### 4.1 Authentication
 
-**API Key vs DefaultAzureCredential**:
-- Primary: Use API key from `.env` file (`AZURE_AI_API_KEY`)
-- Alternative: Use `DefaultAzureCredential` for managed identity scenarios
-- Client initialization checks for API key first, falls back to credential
+Prefer official CLI profiles and Entra ID sign-in with `az login`.
+Alternatively inject `CU_API_KEY` securely and select key authentication.
+Clear conflicting environment overrides when switching identities/resources.
+Do not record keys, bearer tokens, connection strings, or signed URLs in
+schemas, manifests, logs, screenshots, or committed files.
 
-**.env Management**:
-- **NEVER commit `.env` to git** - contains sensitive credentials
-- `.env.sample` provides template
-- `.gitignore` excludes `.env` by default
+Only use resources and customer-visible telemetry the caller is authorized to
+access. Internal resource defaults, service-internal telemetry queries, and
+private evaluation framework dependencies do not belong in this project.
 
-**Client Initialization Validation**:
-```python
-# Client validates credentials on initialization
-client = AzureContentUnderstandingClient(endpoint, credential)
-# Raises ValueError if endpoint/credential invalid
-```
+### 4.2 Rate limits, polling, and retries
 
-### 4.2 Rate Limits & Retries
+CU analysis is asynchronous except where the official CLI explicitly offers
+synchronous preview behavior. The CLI owns submission, polling, backoff, and
+timeouts. Do not copy the deleted client's retry counts or timeout defaults
+into new helpers. The verified CLI has no `analyze --timeout` option.
 
-**Rate Limits**:
-- Per-minute limits vary by resource tier
-- Per-second limits may apply
-- HTTP 429 indicates rate limit exceeded
+HTTP 429 indicates throttling; choose concurrency appropriate to your resource.
+The experiment helper's concurrency is a global budget, not a budget per
+analyzer. Do not blindly rerun a failed command: requests may already have been
+accepted and billed. Inspect retained reports and errors first.
 
-**Auto-Retry Behavior**:
-- Client uses exponential backoff for 429 responses
-- Default retry: 3 attempts with increasing delays
-- Configurable via client initialization
+### 4.3 Discovery and output contracts
 
-**Polling Behavior**:
-- Analysis operations are async (submit + poll for completion)
-- Default timeout: 180 seconds
-- Configurable via `--timeout` parameter
+Let the official CLI handle service inventory/pagination. `cu analyzer show ID`
+already emits JSON; capture stdout for a definition snapshot. Do not pass
+unsupported show output-format flags or write a second pagination client.
 
-### 4.3 Pagination
+Native JSON results can contain root-level `contents` or an LRO
+`result.contents` envelope, also used in older saved results. Typed fields use properties such as `valueString`,
+`valueNumber`, `valueObject`, and `valueArray`. Preserve raw bytes and use the
+offline result reader for derived export/cost work instead of rewriting
+evidence into an invented legacy envelope.
 
-**List Operations**:
-```python
-# list_analyzers() returns paginated results
-analyzers = client.list_analyzers(top=50)  # Max 50 per page
-```
+CLI filenames preserve input extensions, e.g. `invoice.pdf.result.json`, and
+source-relative paths. Keep analyzer/trial/source-relative identity when
+recursively aggregating results. Status reports, manifests, schemas, and usage
+summaries are not extraction results. Reconcile against the planned input
+inventory; present skipped/failed/missing documents in denominators.
 
-**Results Pagination**:
-- Maximum 1000 results per response
-- Use continuation tokens for large result sets
-- Client handles pagination automatically
+### 4.4 Errors and evidence
 
-### 4.4 Error Taxonomy
+- Invalid input/configuration must produce actionable errors and nonzero exit.
+- HTTP 401/403 indicates authentication/authorization problems.
+- HTTP 429 indicates rate limiting; other 4xx errors require checking the request.
+- Service errors/timeouts must remain distinguishable from valid empty extraction.
 
-**ValueError**: Invalid input parameters (e.g., missing analyzer ID, invalid file path)
+Use contextual logging and preserve CLI exit codes, stdout/stderr, reports,
+and request IDs when exposed. Never catch broadly and return success-shaped
+empty results. A completed process is not proof every planned document
+succeeded; inspect per-input outcomes too.
 
-**TimeoutError**: Operation exceeded timeout limit (default 180s)
+Local plans/validation/dry-runs are not live validation. No tool should claim a
+deployed resource exists, a schema works on service, or an operation was free
+without evidence.
 
-**HTTP Status Codes**:
-- `401 Unauthorized` - Invalid API key or missing authentication
-- `403 Forbidden` - Insufficient permissions or resource access denied
-- `429 Too Many Requests` - Rate limit exceeded (auto-retries)
-- `4xx Client Errors` - Invalid request (check parameters)
-- `5xx Server Errors` - Azure service issues (retry may resolve)
+### 4.5 Document content and field descriptions
 
-**Logging Standards**:
-- Use Python `logging` module for all tools
-- Log level: INFO for normal operations, DEBUG for detailed tracing
-- Include request IDs in error logs for Azure support
+For document extraction, reason from the extracted text/layout before writing
+field descriptions. Use text labels, section structure, alternative labels,
+and format examples rather than color, font, boldness, or visual position alone.
+Do not assume a text-oriented extraction workflow receives original images.
+Use the video skill for modality-specific frame/timestamp guidance.
 
-### 4.5 Two-Stage Pipeline ⭐ CRITICAL
-
-Content Understanding uses a **two-stage pipeline**:
-
-```
-Stage 1: Content Extraction (OCR + Layout)
-  ↓ Extracts text, identifies structure (tables, sections, headers)
-  ↓ Outputs: Structured text + layout metadata (NOT original images)
-  ↓
-Stage 2: Field Extraction (AI analyzes text)
-  ↓ GPT-4.1 analyzes extracted text and structure
-  ↓ Uses your field descriptions to identify values
-  ↓ Returns: Field values + confidence scores + grounding
-```
-
-**Critical Rules for Field Descriptions**:
-
-✅ **DO**:
-- Reference **text content, labels, and structure**
-- Use **text-based location hints**: "near 'Total:' label", "in delivery section"
-- Leverage base analyzers (prebuilt-document, prebuilt-layout) for rich structure
-- Provide **alternative labels**: "May be labeled as 'Invoice Date', 'Billing Date', or 'Date'"
-- Include **format examples**: "Format: MM/DD/YYYY. Examples: '01/15/2024', '2024-01-15'"
-
-❌ **DON'T**:
-- Reference **visual appearance**: colors, fonts, bold, italics, font size
-- Describe by visual position alone without text context
-- Expect model to "see" images directly - it analyzes extracted text
-
-**Example - Good Field Description**:
-```json
-"invoiceDate": {
-  "type": "string",
-  "method": "extract",
-  "description": "The date when the invoice was issued, typically found at the top right corner near the invoice number. May be labeled as 'Invoice Date', 'Date', or 'Billing Date'. Format is usually MM/DD/YYYY or DD-MM-YYYY. Examples: '01/15/2024', 'January 15, 2024'."
-}
-```
-
-### 4.6 Schema Design Rules
-
-**Required Elements**:
-1. **Clear field descriptions** with location hints and alternative labels
-2. **Explicit extraction method**: `extract`, `generate`, or `classify`
-3. **Appropriate field types**: string, number, boolean, array, object
-4. **Language matching**: Field descriptions must match document language
-
-**Field Description Best Practices**:
-- Include **what to extract**: "The total amount including tax"
-- Specify **where to find it**: "typically found at the bottom of the invoice"
-- List **alternative labels**: "May be labeled as 'Total', 'Amount Due', or 'Grand Total'"
-- Provide **format expectations**: "Format: Currency with 2 decimals. Example: '$1,234.56'"
-- Add **disambiguation**: "Not to be confused with Subtotal (which excludes tax)"
-
-**Avoid Common Pitfalls**:
-- ❌ Vague descriptions: "Get the date" → ✅ "Invoice issue date from top right"
-- ❌ Negative language: "Not the due date" → ✅ "Issue date when invoice was created"
-- ❌ Visual references: "Bold text at top" → ✅ "Text near 'Invoice #' label"
-- ❌ Language mismatch: English descriptions for Spanish documents
-- ❌ Missing method: Always specify extract/generate/classify
-
-**Testing Strategy**:
-- Start with 3-5 representative sample documents
-- Extract layout first to understand structure
-- Iterate on descriptions based on results
-- Test across document variations
-
-### 4.7 Classify-and-Route Pattern (contentCategories)
-
-CU supports a **classify-and-route** architecture where an outer analyzer classifies pages/segments and routes each to a specialized inner analyzer for field extraction. This is configured via `config.contentCategories`.
-
-> **Guided workflow**: Use `.github/skills/generate-analyzer-classify-route.skill.md` for step-by-step
-> instructions on building a classify-and-route pipeline. This section covers the technical rules and API details.
-
-> **Standard pattern first**: If all your documents share the same structure and fields, use the standard
-> single-analyzer workflow (`.github/skills/generate-analyzer.skill.md`). Classify-and-route is an
-> advanced pattern for packets containing **multiple distinct document types**.
-
-**Architecture**:
-```
-Document Packet (multi-page PDF or batch of images)
-        |
-        v
-+---------------------------+
-| Outer Analyzer (Classifier)|  config.contentCategories + enableSegment
-| baseAnalyzerId: prebuilt-* |
-+---------------------------+
-        |
-   +----+----+----+
-   v         v    v
-+-------+ +-----+ +-----+
-| Inner | |Inner| |Other|  (no routing — classification only)
-| Ana.1 | |Ana.2| |     |
-+-------+ +-----+ +-----+
-```
-
-**When to Use**:
-- Document packets contain **multiple document types** (e.g., titles + registrations + receipts)
-- You need to **classify before extracting** — different fields for different doc types
-- Multi-page PDFs where each page (or page group) is a different form
-- Processing batches from a known set of document categories
-
-**Outer Analyzer Schema** (classifier/router):
 ```json
 {
-    "description": "Classify and route documents",
-    "baseAnalyzerId": "prebuilt-document",
-    "config": {
-        "enableSegment": true,
-        "contentCategories": {
-            "invoice": {
-                "description": "Classify as 'invoice' when the document contains 'Invoice' heading, invoice number, line items with prices, and a total amount.",
-                "analyzerId": "my_invoice_extractor"
-            },
-            "receipt": {
-                "description": "Classify as 'receipt' when the document contains 'Receipt' heading, transaction details, and payment amount.",
-                "analyzerId": "my_receipt_extractor"
-            },
-            "other": {
-                "description": "Classify as 'other' when the document does not match invoice or receipt patterns."
-            }
-        },
-        "omitContent": true
-    },
-    "models": { "completion": "gpt-4.1" }
-}
-```
-
-**Key Rules**:
-
-1. **No `fieldSchema` needed** — The outer analyzer only classifies; field extraction is delegated to inner analyzers referenced by `analyzerId`.
-
-2. **`enableSegment: true`** — Required for the classifier to segment multi-page documents into logical units before classifying each segment.
-
-3. **Category descriptions** — Write classification criteria using text anchors (headings, labels, keywords), NOT visual cues. The two-stage pipeline rule (§4.5) applies here too.
-
-4. **Inner analyzers must exist first** — The `analyzerId` values must reference analyzers that already exist in your Azure AI resource. Create inner analyzers before the classifier.
-
-5. **Categories without `analyzerId`** — Categories like "other" can omit `analyzerId` for classification-only (no field extraction). The result will include the category label but no extracted fields.
-
-6. **`omitContent: true`** — Recommended for classifiers to reduce token usage. The inner analyzers access the full content independently.
-
-**Inner Analyzer Schemas** — Standard field extraction schemas with `fieldSchema`. Each is a regular analyzer optimized for one document type.
-
-**Deployment Sequence**:
-1. Create all inner analyzers (field extraction schemas with `fieldSchema`)
-2. Note their analyzer IDs
-3. Update the classifier schema with real analyzer IDs in `contentCategories`
-4. Create the classifier analyzer
-5. Submit documents to the classifier — it routes automatically
-
-**Result Structure** — Classify-and-route results have one entry per classified segment in `result.contents[]`, each with a `category` field:
-```json
-{
-  "result": {
-    "contents": [
-      {
-        "category": "invoice",
-        "fields": { "invoiceNumber": {...}, "total": {...} }
-      },
-      {
-        "category": "receipt",
-        "fields": { "transactionId": {...}, "amount": {...} }
-      }
-    ]
+  "invoiceDate": {
+    "type": "string",
+    "method": "extract",
+    "description": "The invoice issue date near the invoice number. May be labeled Invoice Date, Issued, or Billing Date. Return the issue date rather than the payment deadline. Examples: 01/15/2024 or January 15, 2024."
   }
 }
 ```
 
-**Testing Classify-and-Route**:
-- Test inner analyzers individually first with their own sample documents
-- Then test the full pipeline with mixed-document packets
-- Verify classification accuracy before evaluating extraction quality
-- Use `Issues/Carvana/review_app/test_classify_route.py` as a reference implementation
+### 4.6 Schema design
 
-### 4.8 Testing Patterns
+Every field needs an appropriate type, explicit method (`extract`, `generate`,
+or `classify`), and useful description. Describe what to extract, text-based
+location/alternative labels, output format, and disambiguation. Match the
+document language. Avoid vague instructions, styling cues, and contradictory
+rules. Enable source/confidence where supported for inspection.
 
-**Scale Test (1×N): Coverage Verification**
-- Run many different documents once each
-- Purpose: Verify fill rate and consistency across document variations
-- Pattern: 100+ documents from production corpus
-- Metrics: Fill rate per field, confidence distribution, edge cases
-- Use: Schema validation before production deployment
+Start with 3-5 representative, approved samples. Inspect layout, create a
+versioned schema, validate locally, and test before scaling. Local quality
+checks complement official CLI structural/spec validation; neither replaces
+service acceptance or reviewed extraction correctness.
 
-**Stability Test (N×1): Consistency Verification**
-- Run same document multiple times (typically 10 iterations)
-- Purpose: Measure extraction consistency and detect randomness
-- Pattern: 10 runs of representative documents
-- Metrics: Confidence variance, field stability, extraction jitter
-- Use: Field reliability analysis, confidence threshold tuning
+### 4.7 Classify-and-route (contentCategories)
 
-**Export and Analyze**:
-- Always export results to CSV for analysis
-- Include: latency, tokens (prompt/completion), confidence, fill rate
-- Compare across schema versions to detect drift/regression
+Use a standard single analyzer when documents share fields/structure.
+Classify-and-route is for mixed packets with multiple document types.
 
-### 4.9 Cost & Token Management
-
-**Token Tracking**:
-- Results include `promptTokens` and `completionTokens`
-- Use for cost estimation (varies by model/tier)
-- Export tokens to CSV for analysis
-
-**Cost Optimization**:
-- Use appropriate base analyzers (prebuilt-layout vs prebuilt-document)
-- Minimize redundant analyses (cache results where possible)
-- Consider field complexity vs extraction value
-
-### 4.10 Preview Agentic API
-
-The following contract was live-verified on the Southeast Asia test resource:
-
-- API version: `2026-06-01-preview`
-- Completion model: `gpt-5.2`
-- Agentic selector: `config.workflow: "Agentic"`
-- Input cardinality: one file per analysis request
-
-The tools retain `2025-11-01` as the GA default. Preview schemas must pass
-`--api-version 2026-06-01-preview` explicitly to the validator,
-`create_and_test.py`, and `run.py`. The validator rejects `config.workflow`
-without that explicit preview contract and accepts only the case-sensitive value
-`Agentic`.
-
-Use a short, non-sensitive create/analyze/delete smoke cycle before running a
-corpus. Agentic mode has materially higher latency and token use: a short
-contract can take more than a minute, while a long CUAD contract can exceed a
-ten-minute timeout. A timeout does not mean analyzer creation or the schema
-contract was rejected. Gate paid scale and stability runs behind explicit cost
-confirmation.
-
-Use `.github/skills/cu-preview-api.skill.md` for the test-resource workflow.
-
----
-
-## Critical Correctness Rules
-
-### Rule 1: Two-Stage Pipeline (REQUIRED)
-
-**Rule**: Field descriptions must reference text content and structure, never visual appearance.
-
-**Consequence of Violation**: Low confidence, incorrect extractions, or null values. Model cannot "see" colors, fonts, or styling.
-
-**Example**:
-- ❌ Bad: "Extract the bold text at the top of the page"
-- ✅ Good: "Extract the text labeled 'Invoice Number' typically found at the top of the page"
-
-### Rule 2: Schema Design (REQUIRED)
-
-**Rule**: Every field must have a clear, detailed description with location hints and alternative labels.
-
-**Consequence of Violation**: Low fill rates, low confidence scores, inconsistent extractions.
-
-**Example**:
-- ❌ Bad: "Get the date"
-- ✅ Good: "The invoice issue date, found near the 'Invoice #' label at the top right. May be labeled as 'Invoice Date', 'Date', or 'Issued'. Format: MM/DD/YYYY."
-
-### Rule 3: Testing Patterns (RECOMMENDED)
-
-**Rule**: Always run both scale (1×N) and stability (N×1) tests before production deployment.
-
-**Consequence of Violation**: Production failures due to edge cases or inconsistent extractions.
-
-**Example**:
-```bash
-# Scale test: 100 documents
-python tools/cu-analyzer-run/run.py --analyzer-id my-analyzer --input corpus/ --output results/scale/
-
-# Stability test: 10 iterations
-python tools/cu-analyzer-run/run.py --analyzer-id my-analyzer --input sample.pdf --iterations 10 --output results/stability/
+```json
+{
+  "description": "Classify a mixed invoice and receipt packet.",
+  "baseAnalyzerId": "prebuilt-document",
+  "config": {
+    "enableSegment": true,
+    "contentCategories": {
+      "invoice": {
+        "description": "Invoice heading, invoice number, priced line items and amount due.",
+        "analyzerId": "case001_v1_invoice"
+      },
+      "receipt": {
+        "description": "Receipt heading, completed purchase details and paid amount.",
+        "analyzerId": "case001_v1_receipt"
+      },
+      "other": {
+        "description": "A document that does not match the invoice or receipt criteria."
+      }
+    },
+    "omitContent": true
+  },
+  "models": {"completion": "gpt-4.1"}
+}
 ```
 
-### Rule 4: Error Handling (REQUIRED)
+The outer analyzer does not need `fieldSchema`: specialized inner analyzers
+perform extraction. `enableSegment: true` enables multi-page segmentation.
+Categories without `analyzerId` are classification-only. Descriptions use text
+anchors, not styling. Inner analyzers must exist first; test them individually,
+then test classification/segmentation before judging routed extraction.
 
-**Rule**: Always use try/except blocks and log errors with context.
+Use the offline schema planner when dependencies need versioned IDs and
+ordering. Otherwise create inner analyzers directly with `cu`, reference their
+actual IDs, then create the outer analyzer. Inspect per-segment `category` and
+`fields` in result `contents`. Keep classification errors separate from
+extraction errors. See `.github/skills/generate-analyzer-classify-route.skill.md`.
 
-**Consequence of Violation**: Silent failures, difficult debugging, lost error context.
+### 4.8 Evaluation
 
-**Example**:
-```python
-import logging
+Scale tests (1 x N documents) measure coverage across variations; stability
+tests (N x 1 document) measure repeated-run consistency. Both are useful before
+production, subject to explicit paid-run approval.
 
-try:
-    result = client.analyze_document(analyzer_id, document)
-except ValueError as e:
-    logging.error(f"Invalid input for {document}: {e}")
-    raise
-except TimeoutError as e:
-    logging.error(f"Analysis timeout for {document}: {e}")
-    raise
-```
+Export derived results to CSV and compare schema versions. Report reviewed
+correctness and denominators, failures/retries, holdout scope, false accepts,
+human review, and regressions. Fill rate, confidence, and non-null fields are
+diagnostics, not correctness or STP. Fix/version ground truth and evaluator
+alongside schemas; changing metrics requires a new comparison iteration.
 
-### Rule 5: File Path Handling (REQUIRED)
+### 4.9 Cost and tokens
 
-**Rule**: Use `pathlib.Path` for cross-platform compatibility. Accept both absolute and relative paths.
+Every iteration records cost status, amount or `null`, currency, basis, and
+coverage. Tokens multiplied by a price sheet are **estimated cost**, not
+actual charges. Missing usage/pricing remains unknown, never zero.
 
-**Consequence of Violation**: Path failures on Windows vs Linux, broken file references.
+Native CLI `--usage` and `--time` may expose console evidence without stable
+per-document numeric fields in result/report JSON. Preserve that evidence;
+do not parse undocumented console text as a guaranteed data contract or invent
+usage/timing. Include paid failures, retries, repeated trials, and evaluation
+calls where measurable; explicitly state gaps.
 
-**Example**:
-```python
-from pathlib import Path
+Customer-visible Azure Monitor usage exports remain supported by
+`cu-usage-diagnostics`. Sequential grouping is approximate and needs known
+call counts and isolated windows; it is not deterministic CU request tracing.
+See its README before attributing model calls to documents.
 
-input_path = Path(args.input).resolve()  # Convert to absolute
-if not input_path.exists():
-    raise ValueError(f"Input path does not exist: {input_path}")
-```
+### 4.10 Preview agentic API
 
----
+The examples use API `2026-06-01-preview`, model `gpt-5.2`,
+`config.workflow: "Agentic"`, and one file per request. GA stays
+`2025-11-01`. Pass the preview API version explicitly to validation, planning,
+creation, and analysis. The local validator rejects `config.workflow` without
+this explicit contract and accepts only the case-sensitive value `Agentic`.
 
-## When to Update
+Use your own authorized resource with available preview features/deployments;
+there is no required internal account or fixed region. Start with an approved
+short, non-sensitive smoke cycle before a corpus. Agentic work can have much
+higher latency and token use; timeout does not itself mean the schema was
+rejected. See `.github/skills/cu-preview-api.skill.md`.
 
-### Add New Validation
+## Code and documentation changes
 
-**When**: Creating a new validation script for connectivity, schema, or service checks.
+Keep helpers narrow, modular, and testable. Use `pathlib.Path`, explicit
+validation/errors, and standard-library-only offline validation where
+possible. Reject ambiguous collisions and unsafe overwrites; preserve input
+bytes, snapshots, and historical evidence.
 
-**Pattern**: Follow `cu_analyzer_validator.py` structure
-- Use standard library only (no external dependencies)
-- Return clear error messages with context
-- Exit with non-zero status on failure
-- Include usage examples in docstring
+Before adding code, check whether official CLI already covers the operation.
+Do not add a general-purpose execution abstraction or import its internal
+implementation packages. Unsupported CLI capabilities must be stated
+explicitly, not silently replaced with different behavior or a REST fallback.
+The former protected-input recovery, reference uploads, and service-generated
+artifact downloads are not claimed as equivalent CLI capabilities. Local PDF
+rendering remains available where appropriate.
 
-**Update Required**:
-- Create script in `tools/cu-analyzer-validate/`
-- Add to "Validate Setup" section in this file
-- Update tool README
+Update affected tool READMEs, root navigation, skills/prompts, and examples.
+Put technical rules here; put workspace format in the canonical guide. Public
+examples start from `examples/_TEMPLATE/`; customer material stays outside this
+repository. Never add internal subscriptions/resources, signed samples, or
+private package/clone requirements.
 
-### Add New Helper
+## Definition of done
 
-**When**: Creating a wrapper function or utility for the CU client.
+- Relevant offline tests pass; new logic has regression coverage.
+- Command examples match the installed public CLI contract.
+- No new direct CU HTTP/SDK path, duplicated polling/authentication, or internal
+  service dependency was introduced.
+- Native and supported historical results remain distinguishable and usable;
+  missing evidence cannot be reported as success or zero cost.
+- Documentation and public example navigation match the implementation.
 
-**Pattern**: Extend `AzureContentUnderstandingClient` class
-- Add method to client class
-- Include error handling with try/except
-- Add logging for debugging
-- Document parameters and return values
+For analyzer work, additionally preserve schema/input hashes, exact commands,
+CLI/API versions, expected job inventory, raw evidence, reviewed truth and
+evaluator versions, CSV/report links, metric denominators, cost coverage,
+baseline comparison, and accept/reject/inconclusive decision. Synchronize the
+root manifest without overwriting completed iterations.
 
-**Update Required**:
-- Update `tools/cu-client/content_understanding_client.py`
-- Add to "API Rules & Correctness" section if it changes API behavior
-- Update tool README
-
-### Update Documentation
-
-**When**: Repository structure changes, new tools added, or workflows modified.
-
-**Update Required**:
-- Update `README.md` for user-facing changes
-- Update relevant tool READMEs
-- Update this file (Agents.md) if repo map or commands change
-- Update `.github/copilot-instructions.md` for AI behavior changes
-
-### Add Example
-
-**When**: Creating a new example project to demonstrate analyzer patterns.
-
-**Pattern**: Copy `Issues/_TEMPLATE/` structure
-- Create `Issues/<project>/` folder
-- Add `samples/`, `schemas/`, `test_results/`, `reports/` subfolders
-- Include project-specific README.md
-- Document use case and field patterns
-
-**Update Required**:
-- Create project in `Issues/<project>/`
-- Add reference in "Examples" section of this file
-- Consider adding to README.md if notable pattern
-
-### Add API Rules
-
-**When**: Discovering new CU service behaviors, rate limits, or API patterns.
-
-**Update Required**:
-- Add to "API Rules & Correctness" section
-- Include error codes and handling patterns
-- Document consequences of violations
-- Add examples demonstrating correct usage
-
----
-
-## Definition of Done
-
-Before finishing a change:
-
-### 1. Tests Pass
-- [ ] Core functionality works (run example commands)
-- [ ] Schema validation succeeds (if applicable)
-- [ ] No syntax errors in Python code
-
-### 2. Tools Run
-- [ ] Validation scripts execute successfully
-- [ ] Analysis tools complete without errors
-- [ ] Export tools produce valid output
-
-### 3. Examples Work
-- [ ] Relevant examples in Issues/ still function correctly
-- [ ] Test commands from README work with new changes
-- [ ] Example paths updated if structure changed
-
-### 4. Documentation Updated
-- [ ] README.md reflects changes (if user-facing)
-- [ ] Tool READMEs updated (if tool-specific)
-- [ ] This file (Agents.md) updated (if repo structure changed)
-- [ ] Inline code comments added (if complex logic)
-
-### 5. Report Created (for analyzer work)
-- [ ] Schema validates successfully
-- [ ] Fill rate >80% for critical fields (target, adjust per use case)
-- [ ] Confidence >0.85 for critical fields (target, adjust per use case)
-- [ ] Results exported to CSV
-- [ ] Report documents tradeoffs and decisions
-
-**For new analyzers specifically**:
-- [ ] Schema follows design best practices (clear descriptions, location hints, alternative labels)
-- [ ] Field extraction methods specified (extract/generate/classify)
-- [ ] Tested on 3-5 representative samples minimum
-- [ ] Grounding enabled for debugging (estimateSourceAndConfidence: true)
-
----
-
-## Quick Reference
-
-### File a Bug
-
-**What to include**:
-1. Clear description of expected vs actual behavior
-2. Steps to reproduce (commands run, input files)
-3. Error messages (full stack traces)
-4. Environment details (Python version, OS)
-5. Schema file (if relevant)
-6. Sample document (if not sensitive)
-
-**Where**: Use `.github/ISSUE_TEMPLATE.md` for structured reporting
-
-### Get Help
-
-**Resources**:
-1. **README.md**: Overview and quick start
-2. **GETTING_STARTED.md**: Step-by-step first analyzer walkthrough
-3. **.github/TROUBLESHOOTING.md**: Common issues and solutions
-4. **Tool READMEs**: Detailed tool-specific documentation
-5. **.github/skills/**: Complete workflow guides
-
-**Escalation Path**:
-- Check TROUBLESHOOTING.md first
-- Review relevant tool README
-- Search Issues/ for similar examples
-- Create GitHub issue with template
-
-### Common Commands Cheat Sheet
-
-```bash
-# Validate schema (supports both field-extraction and classify-and-route schemas)
-python tools/cu-analyzer-validate/cu_analyzer_validator.py schemas/my_schema.json
-
-# Extract layout for schema development
-python tools/cu-analyzer-run/run.py --layout --input samples/ --output layout/
-
-# Create analyzer and test (field extraction)
-python tools/cu-analyzer-run/create_and_test.py --schema schemas/v1.json --input samples/ --output results/
-
-# Create analyzer and test (classify-and-route — see Issues/Carvana/review_app/test_classify_route.py)
-
-# Run scale test
-python tools/cu-analyzer-run/run.py --analyzer-id my-analyzer --input docs/ --output results/scale/
-
-# Run stability test
-python tools/cu-analyzer-run/run.py --analyzer-id my-analyzer --input doc.pdf --iterations 10 --output results/stability/
-
-# Export to CSV (includes category column for classify-and-route results)
-python tools/cu-results-export/export.py --input results/ --output results.csv
-```
-
-### Tool Paths
-
-- **CU Client**: `tools/cu-client/content_understanding_client.py`
-- **Analyzer Run**: `tools/cu-analyzer-run/run.py`
-- **Create & Test**: `tools/cu-analyzer-run/create_and_test.py`
-- **Validator**: `tools/cu-analyzer-validate/cu_analyzer_validator.py`
-- **Exporter**: `tools/cu-results-export/export.py`
-- **Reading Order Visualizer**: `tools/cu-reading-order-viz/visualize_reading_order.py`
-- **Examples**: `Issues/_TEMPLATE/`, `Issues/WK_Runs/WK/`, `Issues/Crowne/`, `Issues/Carvana/`
-- **Prompts**: `.github/prompts/*.prompt.md`
-- **Skills**: `.github/skills/*.skill.md`
-
----
-
-**End of Agents.md** (v1.2 - 2026-07-10)
+For planned/documentation-only work, report **not run**, empty measured
+metrics, unknown/null cost, and remaining prerequisites. Live validation
+requires actual approved service evidence. STP claims require the stronger
+case-level gates in the workspace guide, not fill/confidence targets.
