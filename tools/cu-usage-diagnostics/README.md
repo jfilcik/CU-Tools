@@ -8,6 +8,11 @@ export** path (`insights-logs-azureopenairequestusage` blobs).
 It uses only the caller's authorized resource and storage account; no
 service-side telemetry access or internal test infrastructure is required.
 
+Start with the
+[manual Azure portal correlation walkthrough](../../docs/manual-cu-azure-openai-log-correlation.md)
+to understand which records are being matched, how to inspect them without
+code, and why the result is approximate rather than a deterministic trace.
+
 Use this tool when you have:
 
 - the Foundry/Cognitive Services **resource ID**,

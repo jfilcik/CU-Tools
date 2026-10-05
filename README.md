@@ -127,7 +127,7 @@ to the official CLI. There is no second set of CU credentials to configure.
 | Upgrade exported analyzer definitions | [CU GA Migration](CU%20GA%20Migration/README.md): offline conversion, then explicit `cu` commands |
 | CSV/Excel and field diagnostics | [cu-results-export](tools/cu-results-export/README.md) |
 | Explicit-usage/schema cost estimates | [cu-cost-estimator](tools/cu-cost-estimator/README.md) |
-| Your own Azure Monitor usage-export blobs | [cu-usage-diagnostics](tools/cu-usage-diagnostics/README.md) |
+| Manually correlate CU and Azure OpenAI logs, then summarize your usage-export blobs | [Portal walkthrough](docs/manual-cu-azure-openai-log-correlation.md) and [cu-usage-diagnostics](tools/cu-usage-diagnostics/README.md) |
 | Layout/field inspection or local PDF rendering | [Reading order](tools/cu-reading-order-viz/README.md), [field viewer](tools/cu-visualize/cuDocVisualizer.html), [PDF images](tools/pdf-to-images/) |
 
 ### Repetitions and analyzer comparisons
