@@ -18,7 +18,7 @@ You can enable the `enableImage` feature in two ways:
 
 4. Under **Experimental settings**, check **"Enable image as input"**
 
-   ![Enable image as input setting in CU Studio](images/cu-studio-enable-image-setting.png)
+   ![Enable image as input setting in CU Studio](../enabeImage_In_Project_Settings.png)
 
 5. Save your analyzer and run analysis as usual
 
